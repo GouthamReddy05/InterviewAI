@@ -1,0 +1,292 @@
+"""
+Data Models for Interview System
+"""
+
+from pydantic import BaseModel, Field
+from typing import List, Optional
+from datetime import datetime
+from enum import Enum
+
+
+class CategoryEnum(str, Enum):
+    SKILL = "skill"
+    PROJECT = "project"
+    EXPERIENCE = "experience"
+    ACHIEVEMENT = "achievement"
+
+
+class DifficultyLevel(str, Enum):
+    INTERMEDIATE = "intermediate"
+    ADVANCED = "advanced"
+    EXPERT = "expert"
+
+
+class RatingEnum(str, Enum):
+    POOR = "poor"
+    FAIR = "fair"
+    GOOD = "good"
+    EXCELLENT = "excellent"
+
+
+class InterviewQuestion(BaseModel):
+    id: int
+    category: CategoryEnum
+    name: str
+    primary_question: str
+    context: str
+    difficulty_level: DifficultyLevel
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "id": 1,
+                "category": "skill",
+                "name": "Python",
+                "primary_question": "Describe a production issue you solved using Python.",
+                "context": "Understanding real-world debugging and optimization",
+                "difficulty_level": "advanced"
+            }
+        }
+
+
+class CandidateAnswer(BaseModel):
+    question_id: int
+    answer: str
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class AnswerEvaluation(BaseModel):
+    rating: RatingEnum
+    strengths: List[str]
+    improvements: List[str]
+    follow_up_direction: str
+
+
+class FollowUpQuestion(BaseModel):
+    original_question_id: int
+    follow_up_question: str
+    evaluation: AnswerEvaluation
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
+class InterviewSession(BaseModel):
+    session_id: str
+    resume_name: str
+    job_role: str
+    questions: List[InterviewQuestion]
+    current_question_index: int = 0
+    answers: List[CandidateAnswer] = []
+    follow_ups: List[FollowUpQuestion] = []
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    status: str = "in_progress"  # in_progress, completed
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "session_123",
+                "resume_name": "john_doe.pdf",
+                "job_role": "Senior Backend Engineer",
+                "questions": [],
+                "current_question_index": 0,
+                "answers": [],
+                "follow_ups": [],
+                "status": "in_progress"
+            }
+        }
+
+
+class ResumeUploadRequest(BaseModel):
+    job_role: str
+
+
+class QuestionResponse(BaseModel):
+    session_id: str
+    question_number: int
+    total_questions: int
+    category: CategoryEnum
+    name: str
+    primary_question: str
+    context: str
+    difficulty_level: DifficultyLevel
+
+
+class AnswerSubmissionRequest(BaseModel):
+    answer: str
+
+
+class FollowUpResponse(BaseModel):
+    follow_up_question: str
+    evaluation: AnswerEvaluation
+
+
+class InterviewProgressResponse(BaseModel):
+    session_id: str
+    total_questions: int
+    current_question: int
+    completed_percentage: float
+    status: str
+
+
+class CommunicationAnalysis(BaseModel):
+    """Analysis of candidate's communication skills"""
+    speaking_speed_wpm: float  # Words per minute
+    filler_word_count: int  # Um, ah, like, etc.
+    average_pause_seconds: float
+    confidence_score: float  # 0-100
+    clarity_score: float  # 0-100
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "speaking_speed_wpm": 140,
+                "filler_word_count": 8,
+                "average_pause_seconds": 2.5,
+                "confidence_score": 82,
+                "clarity_score": 85
+            }
+        }
+
+
+class FaceAnalysis(BaseModel):
+    """Analysis of face and eye contact during interview"""
+    eye_contact_percentage: float  # 0-100
+    face_detected_percentage: float  # 0-100
+    head_position: str  # "centered", "left", "right", "down"
+    emotion: str  # "neutral", "happy", "sad", "angry", "confused"
+    looking_away_incidents: int
+    face_missing_incidents: int
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "eye_contact_percentage": 87,
+                "face_detected_percentage": 95,
+                "head_position": "centered",
+                "emotion": "neutral",
+                "looking_away_incidents": 2,
+                "face_missing_incidents": 0
+            }
+        }
+
+
+class CheatingDetectionResult(BaseModel):
+    """Cheating detection analysis"""
+    phone_detected: bool
+    multiple_faces_detected: bool
+    suspicious_behavior_detected: bool
+    cheating_score: float  # 0-100 (higher = more suspicious)
+    flags: List[str] = []
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "phone_detected": False,
+                "multiple_faces_detected": False,
+                "suspicious_behavior_detected": False,
+                "cheating_score": 5,
+                "flags": []
+            }
+        }
+
+
+class InterviewMetrics(BaseModel):
+    """Complete interview metrics and scoring"""
+    technical_score: float  # 0-100
+    communication_score: float  # 0-100
+    confidence_score: float  # 0-100
+    eye_contact_score: float  # 0-100
+    resume_alignment_score: float  # 0-100
+    problem_solving_score: float  # 0-100
+    overall_score: float  # 0-100
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "technical_score": 85,
+                "communication_score": 78,
+                "confidence_score": 82,
+                "eye_contact_score": 87,
+                "resume_alignment_score": 88,
+                "problem_solving_score": 75,
+                "overall_score": 82
+            }
+        }
+
+
+class ImprovementPlan(BaseModel):
+    """Personalized improvement recommendations"""
+    strengths: List[str]
+    weaknesses: List[str]
+    recommendations: List[str]
+    focus_areas: List[str]  # Top 3-5 areas to improve
+    resources: List[str] = []  # Optional learning resources
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "strengths": [
+                    "Strong Python knowledge",
+                    "Good project explanation",
+                    "Clear communication"
+                ],
+                "weaknesses": [
+                    "Poor SQL understanding",
+                    "Limited database design knowledge",
+                    "Too many filler words"
+                ],
+                "recommendations": [
+                    "Practice DBMS concepts",
+                    "Study database design patterns",
+                    "Practice speaking without filler words"
+                ],
+                "focus_areas": [
+                    "Database fundamentals",
+                    "Communication clarity",
+                    "System design"
+                ],
+                "resources": [
+                    "LeetCode Database Problems",
+                    "System Design Primer"
+                ]
+            }
+        }
+
+
+class InterviewReport(BaseModel):
+    """Complete interview report"""
+    session_id: str
+    resume_name: str
+    job_role: str
+    questions_answered: int
+    total_questions: int
+    
+    # Scores and metrics
+    metrics: InterviewMetrics
+    communication_analysis: CommunicationAnalysis
+    face_analysis: FaceAnalysis
+    cheating_detection: CheatingDetectionResult
+    
+    # Q&A with evaluations
+    q_and_a: List[dict]  # Question, answer, evaluation, follow-up
+    
+    # Recommendations
+    improvement_plan: ImprovementPlan
+    
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "session_id": "session_123",
+                "resume_name": "john_doe.pdf",
+                "job_role": "Senior Backend Engineer",
+                "questions_answered": 5,
+                "total_questions": 10,
+                "metrics": {},
+                "communication_analysis": {},
+                "face_analysis": {},
+                "cheating_detection": {},
+                "q_and_a": [],
+                "improvement_plan": {}
+            }
+        }

@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+elevenlabs
+faster-whisper
+soundDevice
+mediapipe
+opencv-python
+silero_vad
+torch
+ultralytics
+pypdf2
+python-docx
+langchain
+langchain-google-genai
+pydantic>=1.7.0
+python-multipart
+python-dotenv
