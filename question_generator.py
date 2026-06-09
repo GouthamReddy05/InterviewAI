@@ -4,7 +4,7 @@ Question Generation and Interview Logic
 
 import json
 import os
-from typing import List, Optional, Dict
+from typing import List, Optional
 import uuid
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage

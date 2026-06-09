@@ -3,7 +3,7 @@ Configuration for InterviewAI
 """
 
 import os
-from typing import Optional
+# from typing import Optional
 
 # OpenAI Configuration
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
