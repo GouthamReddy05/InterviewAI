@@ -4,6 +4,7 @@
 
 const state = {
     step: 0, // 0:landing 1:upload 2:analysis 3:setup 4:interview 5:results
+    sessionId: null,
     resumeFile: null,
     resumeFileName: '',
     jobRole: '',
@@ -14,6 +15,7 @@ const state = {
     experience: '',
     currentQuestion: 0,
     questions: [],
+    totalQuestions: 0,
     answers: [],
     metrics: {
         technicalScore: 0,
@@ -71,6 +73,7 @@ const state = {
 /** Reset all mutable fields for a fresh interview without reloading the page. */
 function resetState() {
     state.step = 0;
+    state.sessionId = null;
     state.resumeFile = null;
     state.resumeFileName = '';
     state.jobRole = '';
@@ -81,6 +84,7 @@ function resetState() {
     state.experience = '';
     state.currentQuestion = 0;
     state.questions = [];
+    state.totalQuestions = 0;
     state.answers = [];
     state.metrics = {
         technicalScore: 0, communicationScore: 0, confidenceScore: 0,
@@ -118,45 +122,4 @@ function resetState() {
     state.evaluations = [];
 }
 
-// Gemini 1.5 Flash client connection
-state.geminiKey = 'AQ.Ab8RN6LqI7s7pyuzLXNEfvJ5JPbXFiX57xluZ5HE5ZElvDi8oA';
 
-async function callGemini(prompt, systemInstruction = "") {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.geminiKey}`;
-    
-    const requestBody = {
-        contents: [{ parts: [{ text: prompt }] }]
-    };
-    
-    if (systemInstruction) {
-        requestBody.systemInstruction = {
-            parts: [{ text: systemInstruction }]
-        };
-    }
-    
-    try {
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(requestBody)
-        });
-        
-        if (!response.ok) {
-            const errText = await response.text();
-            throw new Error(`Gemini API Response Error: ${response.status} - ${errText}`);
-        }
-        
-        const data = await response.json();
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
-            return data.candidates[0].content.parts[0].text.trim();
-        } else {
-            console.error("Gemini Response structure:", data);
-            throw new Error("Empty or malformed candidates list from Gemini");
-        }
-    } catch (e) {
-        console.error("Failed to execute Gemini API call:", e);
-        throw e;
-    }
-}

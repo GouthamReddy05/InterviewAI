@@ -113,7 +113,7 @@ function renderInterviewSetup() {
 
 function selectDifficulty(diff) {
     state.difficulty = diff;
-    generateQuestions(); // Regenerate question set based on selected tier
+    // Note: Questions are already fetched from backend, don't regenerate
     renderInterviewSetup();
 }
 

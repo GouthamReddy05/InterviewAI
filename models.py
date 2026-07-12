@@ -52,6 +52,8 @@ class InterviewQuestion(BaseModel):
 class CandidateAnswer(BaseModel):
     question_id: int
     answer: str
+    is_followup: bool = False
+    followup_depth: int = 0
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
@@ -64,7 +66,9 @@ class AnswerEvaluation(BaseModel):
 
 class FollowUpQuestion(BaseModel):
     original_question_id: int
-    follow_up_question: str
+    depth: int
+    question: str
+    candidate_answer: str = ""
     evaluation: AnswerEvaluation
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
@@ -73,10 +77,23 @@ class InterviewSession(BaseModel):
     session_id: str
     resume_name: str
     job_role: str
+    extracted_profile: dict = {}
     questions: List[InterviewQuestion]
     current_question_index: int = 0
+
+    # Interview flow - Follow-up tracking
+    is_followup_mode: bool = False
+    current_followup_depth: int = 0
+    max_followup_depth: int = 3
+    current_followup_question: str = ""
+
     answers: List[CandidateAnswer] = []
     follow_ups: List[FollowUpQuestion] = []
+
+    # Conversation history for context-aware follow-ups
+    # Each entry: {"type": "question|answer", "question_id": int, "text": str, "depth": int}
+    conversation_history: List[dict] = []
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = "in_progress"  # in_progress, completed
 

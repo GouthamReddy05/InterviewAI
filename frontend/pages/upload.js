@@ -72,27 +72,7 @@ function renderUpload() {
                 </div>
             </div>
 
-            <!-- Quick Start Profiles -->
-            <div class="mb-8">
-                <label class="block text-sm font-medium text-surface-300 mb-2">Or Select a Quick Start Profile</label>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <button onclick="loadSampleResume('Goutham', 'Data Scientist', ['Python', 'TensorFlow', 'SQL', 'Scikit-Learn', 'Pandas'], ['Crop Disease Detection', 'JobSphere', 'Sales Predictor'], '1.5 years internship at AI Lab')"
-                        class="p-3 rounded-lg border border-surface-700 bg-surface-900/30 text-surface-300 hover:border-accent-600/50 hover:bg-accent-600/10 transition-all text-xs text-left">
-                        <div class="font-bold text-white mb-0.5">📄 Goutham</div>
-                        <div class="text-surface-400">Data Scientist</div>
-                    </button>
-                    <button onclick="loadSampleResume('Ananya', 'AI Engineer', ['PyTorch', 'Transformers', 'HuggingFace', 'FastAPI', 'Python'], ['Medical Image ViT', 'DocChat Agent', 'VoiceScribe'], '2 years AI Developer experience')"
-                        class="p-3 rounded-lg border border-surface-700 bg-surface-900/30 text-surface-300 hover:border-accent-600/50 hover:bg-accent-600/10 transition-all text-xs text-left">
-                        <div class="font-bold text-white mb-0.5">📄 Ananya</div>
-                        <div class="text-surface-400">AI Engineer</div>
-                    </button>
-                    <button onclick="loadSampleResume('Ryan', 'Full Stack Developer', ['React', 'Node.js', 'Express', 'MongoDB', 'JavaScript'], ['E-comm Platform', 'TaskHub Board', 'ChatStream'], '3 years Frontend & Backend intern')"
-                        class="p-3 rounded-lg border border-surface-700 bg-surface-900/30 text-surface-300 hover:border-accent-600/50 hover:bg-accent-600/10 transition-all text-xs text-left">
-                        <div class="font-bold text-white mb-0.5">📄 Ryan</div>
-                        <div class="text-surface-400">Full Stack Dev</div>
-                    </button>
-                </div>
-            </div>
+
 
             <!-- Job Role -->
             <div class="mb-10">
@@ -167,6 +147,58 @@ function selectJobRole(role) {
     renderUpload();
 }
 
+/**
+ * Upload resume to backend to create interview session
+ */
+async function uploadResumeToBackend() {
+    try {
+        const formData = new FormData();
+        formData.append('resume', state.resumeFile);
+        formData.append('job_role', state.jobRole);
+        if (state.resumeRawText) {
+            formData.append('resume_text', state.resumeRawText);
+        }
+        
+        const response = await API.uploadResume(formData);
+        
+        if (response.status === 'success') {
+            // Store session ID
+            state.sessionId = response.session_id;
+            state.totalQuestions = response.total_questions;
+            
+            // Load all questions from backend
+            if (response.questions && response.questions.length > 0) {
+                state.questions = response.questions.map((q, idx) => ({
+                    id: idx + 1,
+                    text: q.primary_question,
+                    category: q.category,
+                    name: q.name,
+                    primary_question: q.primary_question,
+                    context: q.context,
+                    difficulty_level: q.difficulty_level,
+                    ideal: `Context: ${q.context}`,
+                    concepts: []
+                }));
+                
+                // Use explicitly extracted profile from LLM
+                const profile = response.extracted_profile || {};
+                state.skills = profile.skills || [];
+                state.projects = profile.projects || [];
+                
+                const exp = profile.experience || [];
+                state.experience = exp.length > 0 ? exp.join(', ') : 'Professional Experience';
+            }
+            
+            console.log('Resume uploaded successfully, session created:', state.sessionId);
+            console.log('Loaded questions:', state.questions.length);
+        } else {
+            console.error('Resume upload failed:', response);
+        }
+    } catch (error) {
+        console.error('Error uploading resume:', error);
+    }
+}
+
 function loadSampleResume(name, role, skills, projects, experience) {
     state.candidateName = name;
     state.jobRole = role;
@@ -209,6 +241,7 @@ async function extractTextFromPDF(file) {
 
 function startAnalysis() {
     if (!state.resumeFile || !state.jobRole) return;
+    
     state.step = 2;
     render();
     simulateAnalysis();

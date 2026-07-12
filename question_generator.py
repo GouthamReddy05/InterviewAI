@@ -10,6 +10,8 @@ from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain.chat_models import init_chat_model
 import sys
+from langchain_groq import ChatGroq
+from requests import session
 
 # Load environment variables from .env file
 load_dotenv()
@@ -24,12 +26,6 @@ from models import (
     FollowUpQuestion,
     AnswerEvaluation,
     RatingEnum,
-    CommunicationAnalysis,
-    FaceAnalysis,
-    CheatingDetectionResult,
-    InterviewMetrics,
-    ImprovementPlan,
-    InterviewReport
 )
 from prompts import (
     QUESTION_GENERATION_PROMPT,
@@ -39,15 +35,20 @@ from prompts import (
 
 
 class InterviewQuestionGenerator:
-    """Generate interview questions from resume using Gemini LLM"""
+    """Generate interview questions from resume using Llama3 LLM"""
     
     def __init__(self, api_key: Optional[str] = None):
-        """Initialize with Google Gemini API key"""
-        self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
+        """Initialize with GROQ API key"""
+        self.api_key = api_key or os.getenv("GROQ_API_KEY")
         if not self.api_key:
-            raise ValueError("Google API key not found. Set GOOGLE_API_KEY environment variable.")
+            raise ValueError("GROQ API key not found. Set GROQ_API_KEY environment variable.")
         
-        self.model = init_chat_model("google_genai:gemini-2.5-flash", api_key=self.api_key)
+        self.model = ChatGroq(
+            groq_api_key=self.api_key, 
+            model="llama-3.3-70b-versatile", 
+            temperature=0.2,
+            max_tokens=8000
+        )
     
     def generate_questions(self, resume_text: str) -> List[InterviewQuestion]:
         """Generate interview questions from resume text"""
@@ -119,9 +120,14 @@ class InterviewQuestionGenerator:
             
             # Convert to InterviewQuestion objects
             questions = []
+            valid_difficulties = {"intermediate", "advanced", "expert"}
             for idx, q in enumerate(data.get("questions", []), 1):
-                category = q.get("category", "skill").lower().strip()
+                category = str(q.get("category", "skill")).lower().strip()
                 category = category_map.get(category, "skill")  # Default to "skill" if unknown
+                
+                diff = str(q.get("difficulty_level", "intermediate")).lower().strip()
+                if diff not in valid_difficulties:
+                    diff = "intermediate"
                 
                 question = InterviewQuestion(
                     id=idx,
@@ -129,12 +135,14 @@ class InterviewQuestionGenerator:
                     name=q.get("name", ""),
                     primary_question=q.get("primary_question", ""),
                     context=q.get("context", ""),
-                    difficulty_level=q.get("difficulty_level", "intermediate")
+                    difficulty_level=diff
                 )
                 questions.append(question)
             
             print(f"[DEBUG] Created {len(questions)} InterviewQuestion objects\n")
-            return questions
+            
+            profile = data.get("extracted_profile", {})
+            return questions, profile
         
         except Exception as e:
             print(f"[ERROR] Exception in generate_questions: {type(e).__name__}: {e}")
@@ -147,15 +155,31 @@ class InterviewQuestionGenerator:
         primary_question: str,
         candidate_answer: str,
         difficulty_level: str,
-        context: str
+        context: str,
+        conversation_history: List[dict] = None,
+        current_depth: int = 1,
+        max_depth: int = 3
     ) -> str:
-        """Generate follow-up question based on candidate answer"""
+        """Generate follow-up question based on candidate answer and conversation history"""
+        
+        # Format conversation history for prompt
+        history_text = ""
+        if conversation_history and len(conversation_history) > 0:
+            history_text = "\n".join([
+                f"[{h.get('type', 'unknown').upper()}] {h.get('text', '')}"
+                for h in conversation_history
+            ])
+        else:
+            history_text = "[No prior follow-ups yet]"
         
         prompt = FOLLOWUP_QUESTION_PROMPT.format(
             primary_question=primary_question,
             difficulty_level=difficulty_level,
             context=context,
-            candidate_answer=candidate_answer
+            candidate_answer=candidate_answer,
+            conversation_history=history_text,
+            current_depth=current_depth,
+            max_depth=max_depth
         )
         
         try:
@@ -167,7 +191,7 @@ class InterviewQuestionGenerator:
             return response.content.strip()
         
         except Exception as e:
-            raise Exception(f"Gemini API error generating follow-up: {str(e)}")
+            raise RuntimeError(f"GROQ follow-up generation failed: {e}") from e
     
     def evaluate_answer(
         self,
@@ -242,7 +266,7 @@ class InterviewSessionManager:
         """Create a new interview session"""
         
         # Generate questions from resume text
-        questions = self.generator.generate_questions(resume_text)
+        questions, profile = self.generator.generate_questions(resume_text)
         
         # Create session
         session_id = str(uuid.uuid4())
@@ -250,6 +274,7 @@ class InterviewSessionManager:
             session_id=session_id,
             resume_name=resume_name,
             job_role=job_role,
+            extracted_profile=profile,
             questions=questions
         )
         
@@ -273,7 +298,19 @@ class InterviewSessionManager:
         return None
     
     def submit_answer(self, session_id: str, answer: str) -> dict:
-        """Submit answer to current question"""
+        """
+        Submit answer to current question or follow-up.
+        
+        Returns:
+        {
+            "action": "follow_up" | "next_question",
+            "evaluation": AnswerEvaluation dict,
+            "follow_up_question": str (if action="follow_up", else null),
+            "next_question": InterviewQuestion dict (if action="next_question", else null),
+            "next_question_available": bool,
+            "followup_depth": int
+        }
+        """
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
@@ -281,13 +318,30 @@ class InterviewSessionManager:
         current_question = self.get_current_question(session_id)
         if not current_question:
             raise ValueError(f"No current question in session {session_id}")
-        
+        # Add the primary question only once for this question
+        if not session.conversation_history:
+            session.conversation_history.append({
+                "type": "primary_question",
+                "question_id": current_question.id,
+                "text": current_question.primary_question
+            })
+
         # Store answer
         candidate_answer = CandidateAnswer(
             question_id=current_question.id,
-            answer=answer
+            answer=answer,
+            is_followup=session.is_followup_mode,
+            followup_depth=session.current_followup_depth
         )
         session.answers.append(candidate_answer)
+        
+        # Add to conversation history
+        session.conversation_history.append({
+            "type": "answer" if not session.is_followup_mode else "followup_answer",
+            "question_id": current_question.id,
+            "depth": session.current_followup_depth,
+            "text": answer
+        })
         
         # Evaluate answer
         evaluation = self.generator.evaluate_answer(
@@ -295,36 +349,123 @@ class InterviewSessionManager:
             candidate_answer=answer
         )
         
-        # Generate follow-up
-        follow_up_q = self.generator.generate_followup(
-            primary_question=current_question.primary_question,
-            candidate_answer=answer,
-            difficulty_level=current_question.difficulty_level,
-            context=current_question.context
-        )
+        # ===== DECIDE: Follow-up or Move to Next Question? =====
+        should_ask_followup = False
+        action = "next_question"
         
-        follow_up = FollowUpQuestion(
-            original_question_id=current_question.id,
-            follow_up_question=follow_up_q,
-            evaluation=evaluation
-        )
-        session.follow_ups.append(follow_up)
+        # First submission (not in followup mode yet)
+        if not session.is_followup_mode:
+            should_ask_followup = True
+            session.is_followup_mode = True
+            session.current_followup_depth = 1
+        else:
+            # In follow-up mode: continue if depth < max_depth
+            if (
+                session.current_followup_depth < session.max_followup_depth
+                and evaluation.rating in [
+                    RatingEnum.POOR,
+                    RatingEnum.FAIR,
+                    RatingEnum.GOOD
+                ]
+            ):
+                session.current_followup_depth += 1
+                should_ask_followup = True
+            else:
+                should_ask_followup = False
         
-        return {
-            "answer_received": True,
+        # Generate follow-up if needed
+        follow_up_question = None
+        if should_ask_followup:
+            action = "follow_up"
+            follow_up_q = self.generator.generate_followup(
+                primary_question=current_question.primary_question,
+                candidate_answer=answer,
+                difficulty_level=current_question.difficulty_level,
+                context=current_question.context,
+                conversation_history=session.conversation_history,
+                current_depth=session.current_followup_depth,
+                max_depth=session.max_followup_depth
+            )
+            
+            follow_up_question = follow_up_q
+            
+            # Add follow-up to conversation history
+            session.conversation_history.append({
+                "type": "followup_question",
+                "question_id": current_question.id,
+                "depth": session.current_followup_depth,
+                "text": follow_up_q
+            })
+            
+            # Store follow-up record
+            follow_up = FollowUpQuestion(
+                original_question_id=current_question.id,
+                depth=session.current_followup_depth,
+                question=follow_up_q,
+                candidate_answer=answer,
+                evaluation=evaluation
+            )
+            session.follow_ups.append(follow_up)
+        else:
+            # Moving to next question - reset follow-up state
+            action = "next_question"
+            session.is_followup_mode = False
+            session.current_followup_depth = 0
+            session.conversation_history = []
+            
+            # Store the main follow-up for record (this was the final follow-up we asked)
+            if session.follow_ups and session.follow_ups[-1].original_question_id == current_question.id:
+                pass  # Already stored
+        
+        # Prepare response
+        result = {
+            "action": action,
             "evaluation": evaluation.dict(),
-            "follow_up": follow_up_q,
-            "next_question_available": (session.current_question_index + 1) < len(session.questions)
+            "follow_up_question": follow_up_question,
+            "followup_depth": session.current_followup_depth,
+            "next_question": None,
+            "next_question_available": False
         }
+        
+        # If moving to next question, include it
+        if action == "next_question":
+            has_next = session.current_question_index < len(session.questions) - 1
+            result["next_question_available"] = has_next
+            
+            if has_next:
+                session.current_question_index += 1
+                next_q = session.questions[session.current_question_index]
+                result["next_question"] = {
+                    "question_number": session.current_question_index + 1,
+                    "total_questions": len(session.questions),
+                    "category": next_q.category,
+                    "name": next_q.name,
+                    "primary_question": next_q.primary_question,
+                    "context": next_q.context,
+                    "difficulty_level": next_q.difficulty_level
+                }
+            else:
+                # Interview complete
+                session.status = "completed"
+        
+        return result
     
     def proceed_to_next_question(self, session_id: str) -> bool:
-        """Move to next question"""
+        """
+        Deprecated - progression now happens in submit_answer().
+        This is kept for backward compatibility only.
+        Move to next question
+        """
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
         
         if session.current_question_index < len(session.questions) - 1:
             session.current_question_index += 1
+            # Reset follow-up state for new question
+            session.is_followup_mode = False
+            session.current_followup_depth = 0
+            session.conversation_history = []
             return True
         else:
             # Interview complete
@@ -372,21 +513,29 @@ class InterviewSessionManager:
                 (q for q in session.questions if q.id == answer.question_id),
                 None
             )
-            follow_up = next(
-                (f for f in session.follow_ups if f.original_question_id == answer.question_id),
-                None
-            )
+            followups = [
+                    f for f in session.follow_ups
+                    if f.original_question_id == answer.question_id
+                ]
             
             if question:
                 qa_pair = {
                     "question": question.primary_question,
                     "category": question.category,
                     "answer": answer.answer,
-                    "evaluation": follow_up.evaluation.dict() if follow_up else None,
-                    "follow_up": follow_up.follow_up_question if follow_up else None
+
+                    "follow_ups": [
+                        {
+                            "question": f.question,
+                            "candidate_answer": f.candidate_answer,
+                            "evaluation": f.evaluation.dict()
+                        }
+                        for f in followups
+                    ]
                 }
+
                 report["qa_pairs"].append(qa_pair)
-        
+                
         return report
     
     def generate_improvement_plan(self, session_id: str) -> dict:

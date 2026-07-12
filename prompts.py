@@ -11,11 +11,12 @@ STRICT RULES:
 
 1. IGNORE the Education section completely.
 
-2. Generate questions for:
+2. Generate A MASSIVE AMOUNT OF QUESTIONS. YOU MUST GENERATE AT LEAST 15 TO 20 QUESTIONS MINIMUM.
    - Technical skills (4 questions per skill)
    - Projects (4 questions per project)
    - Work/Internship/Freelance/Research/Leadership Experience (4 questions per role)
    - Achievements/Awards (4 questions per achievement)
+   DO NOT STOP GENERATING UNTIL YOU HAVE AT LEAST 15 QUESTIONS TOTAL!
 
 3. Question Quality Guidelines:
    - Ask about PRACTICAL usage, not textbook definitions.
@@ -45,11 +46,20 @@ Instead ask:
    - What tradeoffs exist in Y?
    - Why choose Z over alternative?
 
-7. Output ONLY valid JSON. No markdown, no explanations.
+7. OUTPUT FORMAT (CRITICAL):
+   - You MUST output ONLY valid JSON.
+   - DO NOT output any markdown backticks (e.g. ```json).
+   - DO NOT output any introductions or explanations.
+   - Your entire response MUST start with {{ and end with }} and be parseable by json.loads().
 
 JSON Format:
 
 {{
+  "extracted_profile": {{
+    "skills": ["ALL technical skills found in resume (e.g. Python, React)"],
+    "projects": ["ALL project names found"],
+    "experience": ["ALL job titles/roles found"]
+  }},
   "questions": [
     {{
       "id": 1,
@@ -76,8 +86,13 @@ Primary Question: {primary_question}
 Difficulty Level: {difficulty_level}
 Context: {context}
 
-Candidate's Answer:
+Conversation History (includes previous follow-ups at this question):
+{conversation_history}
+
+Candidate's Latest Answer:
 {candidate_answer}
+
+Follow-up Depth: {current_depth} / {max_depth}
 
 Generate the NEXT best follow-up question that a real interviewer would ask to dig deeper.
 
@@ -93,6 +108,8 @@ Rules for Follow-Up Questions:
 8. Push on vague statements - "Can you give a concrete example?"
 9. Challenge assumptions - "What if the requirements changed?"
 10. Dig into depth - "How did you handle edge cases?"
+11. Reference previous answers in conversation history to show continuity and depth.
+12. After max {max_depth} follow-ups, indicate if you've exhausted depth on this topic.
 
 Output ONLY the follow-up question. No explanation, no numbering, just the question.
 """

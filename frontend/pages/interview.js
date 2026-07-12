@@ -88,28 +88,42 @@ function initMediaPipe() {
 
             // A. Check for Face Absence
             if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
-                state.simulations.noFace = true;
+                if (!state.simulations.noFace) {
+                    state.simulations.noFace = true;
+                    const warningMsg = 'Face missing. Return to the camera viewport.';
+                    if (!state.warnings.includes(warningMsg)) {
+                        state.warnings.unshift(warningMsg);
+                        updateWarningsList();
+                        showTopBanner('FACE NOT DETECTED');
+                    }
+                }
                 
-                // Draw dark HUD warning
                 ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
                 ctx.fillRect(0, 0, w, h);
-                ctx.fillStyle = '#f87171';
-                ctx.font = 'bold 12px monospace';
-                ctx.textAlign = 'center';
-                ctx.fillText('🔴 FACE NOT DETECTED', w / 2, h / 2 - 10);
-                ctx.fillStyle = '#a3a3a3';
-                ctx.font = '9px monospace';
-                ctx.fillText('Please look directly at the webcam', w / 2, h / 2 + 10);
                 return;
             }
 
             state.simulations.noFace = false;
+            // Clear the immediate warning if they return
+            state.warnings = state.warnings.filter(w => !w.includes('Face missing'));
+            updateWarningsList();
 
             // B. Check for Multiple People (Cheating Detection)
             if (results.multiFaceLandmarks.length > 1) {
-                state.simulations.multipleFaces = true;
+                if (!state.simulations.multipleFaces) {
+                    state.simulations.multipleFaces = true;
+                    const warningMsg = 'Multiple people detected in frame!';
+                    if (!state.warnings.includes(warningMsg)) {
+                        state.warnings.unshift(warningMsg);
+                        state.cheatingStats.multipleFacesCount++;
+                        updateWarningsList();
+                        showTopBanner('MULTIPLE PEOPLE DETECTED');
+                    }
+                }
             } else {
                 state.simulations.multipleFaces = false;
+                state.warnings = state.warnings.filter(w => !w.includes('Multiple people detected'));
+                updateWarningsList();
             }
 
             // Loop and draw landmarks for detected faces
@@ -167,10 +181,15 @@ function initMediaPipe() {
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(bX - 5, bY - 5, bW + 10, bH + 10);
                 
+                // Premium label background
                 ctx.fillStyle = borderCol;
-                ctx.font = 'bold 8px monospace';
+                const textWidth = ctx.measureText(tagText).width;
+                ctx.fillRect(bX - 5, bY - 20, textWidth + 10, 15);
+                
+                ctx.fillStyle = '#111'; // Dark text for contrast
+                ctx.font = 'bold 9px monospace';
                 ctx.textAlign = 'left';
-                ctx.fillText(tagText, bX - 5, bY - 10);
+                ctx.fillText(tagText, bX, bY - 10);
 
                 // Draw specific facial landmarks (lips, eyes, outline)
                 ctx.fillStyle = fIdx > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(51, 163, 255, 0.5)';
@@ -220,7 +239,7 @@ function initMediaPipe() {
                 
                 ctx.fillStyle = '#ef4444';
                 ctx.font = 'bold 8px monospace';
-                ctx.fillText('YOLOv8: CELL PHONE (94%)', px, py - 4);
+                ctx.fillText('YOLOv8: CELL PHONE DETECTED', px, py - 4);
                 
                 ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
                 ctx.fillRect(px, py, 50, 80);
@@ -230,7 +249,10 @@ function initMediaPipe() {
         // Initialize Camera utility
         cameraInstance = new Camera(video, {
             onFrame: async () => {
-                if (state.interviewActive && faceMesh) {
+                if (!state.interviewActive) return;
+                
+                // Run FaceMesh (runs fast, optimized for 30fps)
+                if (faceMesh) {
                     await faceMesh.send({ image: video });
                 }
             },
@@ -250,6 +272,9 @@ function initMediaPipe() {
 
 /* -------- Speech Recognition -------- */
 
+let mediaRecorder = null;
+let audioChunks = [];
+
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -263,7 +288,7 @@ function initSpeechRecognition() {
     recognition.lang = 'en-US';
     
     recognition.onstart = () => {
-        state.isRecording = true;
+        // state.isRecording = true; handled by startRecording
         recordingStartTime = Date.now();
         state.transcript = '';
         render();
@@ -319,19 +344,15 @@ function initSpeechRecognition() {
     };
     
     recognition.onend = () => {
-        if (state.isRecording) {
+        if (state.isRecording && recognition) {
             try { recognition.start(); } catch(e) {}
         }
     };
 }
 
-function startRecording() {
-    if (!recognition) {
-        alert('Web Speech API is not supported in this browser. Please type your answer.');
-        return;
-    }
+async function startRecording() {
     if (state.isRecording) {
-        stopRecording();
+        await stopRecording();
         return;
     }
     
@@ -340,24 +361,67 @@ function startRecording() {
         window.speechSynthesis.cancel();
     }
     
-    try {
-        recognition.start();
-    } catch(e) {
-        console.error('Failed to start recognition', e);
+    if (recognition) {
+        try { recognition.start(); } catch(e) { console.error('Failed to start recognition', e); }
+    }
+    
+    if (state.stream) {
+        audioChunks = [];
+        mediaRecorder = new MediaRecorder(state.stream);
+        mediaRecorder.ondataavailable = e => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+        };
+        mediaRecorder.start();
+        state.isRecording = true;
+        recordingStartTime = Date.now();
+        render();
     }
 }
 
 function stopRecording() {
-    if (recognition) {
+    return new Promise((resolve) => {
+        if (!state.isRecording) {
+            resolve();
+            return;
+        }
+        
         state.isRecording = false;
-        try { recognition.stop(); } catch(e) {}
-    }
-    
-    const input = document.getElementById('textInput');
-    if (input && input.value.trim()) {
-        state.transcript = input.value.trim();
-    }
-    render();
+        
+        if (recognition) {
+            try { recognition.stop(); } catch(e) {}
+        }
+        
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                const input = document.getElementById('textInput');
+                if (input) input.placeholder = "Transcribing with Whisper...";
+                render();
+                
+                try {
+                    const response = await API.transcribeAudio(audioBlob);
+                    if (response.status === 'success' && response.transcription && response.transcription.text) {
+                        state.transcript = response.transcription.text;
+                        if (input) input.value = state.transcript;
+                    }
+                } catch (err) {
+                    console.error("Backend transcription failed", err);
+                }
+                
+                if (input) input.placeholder = "Type your answer or use microphone...";
+                render();
+                resolve();
+            };
+            mediaRecorder.stop();
+        } else {
+            const input = document.getElementById('textInput');
+            if (input && input.value.trim()) {
+                state.transcript = input.value.trim();
+            }
+            render();
+            resolve();
+        }
+    });
 }
 
 /* -------- Renderer -------- */
@@ -507,6 +571,8 @@ function startCvCanvas() {
 
 /* -------- Realtime Simulations (1s ticker) -------- */
 
+let frameAnalysisInterval = null;
+
 function startRealtimeSimulation() {
     cheatCheckInterval = setInterval(() => {
         if (!state.interviewActive) {
@@ -541,23 +607,10 @@ function startRealtimeSimulation() {
 
         if (state.simulations.noFace) {
             state.metrics.eyeContactScore = Math.max(0.0, (state.metrics.eyeContactScore - 1.2).toFixed(1));
-            const warningMsg = 'Face missing. Return to the camera viewport.';
-            if (!state.warnings.includes(warningMsg)) {
-                state.warnings.unshift(warningMsg);
-                updateWarningsList();
-            }
-        } else {
-            state.warnings = state.warnings.filter(w => !w.includes('Face missing'));
-            updateWarningsList();
         }
 
         if (state.simulations.multipleFaces) {
-            const warningMsg = 'Multiple people detected in frame!';
-            if (!state.warnings.includes(warningMsg)) {
-                state.warnings.unshift(warningMsg);
-                state.cheatingStats.multipleFacesCount++;
-                updateWarningsList();
-            }
+            state.metrics.eyeContactScore = Math.max(0.0, (state.metrics.eyeContactScore - 0.5).toFixed(1));
         }
 
         if (state.simulations.phoneUsage) {
@@ -566,7 +619,11 @@ function startRealtimeSimulation() {
                 state.warnings.unshift(warningMsg);
                 state.cheatingStats.mobileDetectedCount++;
                 updateWarningsList();
+                showTopBanner('MOBILE PHONE DETECTED');
             }
+        } else {
+            state.warnings = state.warnings.filter(w => !w.includes('Mobile phone usage detected'));
+            updateWarningsList();
         }
 
         const liveEye = document.getElementById('liveEyeContact');
@@ -585,6 +642,121 @@ function startRealtimeSimulation() {
         updateHUDMetrics();
 
     }, 1000);
+
+    // Start periodic frame analysis (every 2 seconds)
+    startFrameAnalysis();
+}
+
+/**
+ * Periodic frame analysis from video element
+ */
+function startFrameAnalysis() {
+    frameAnalysisInterval = setInterval(async () => {
+        if (!state.interviewActive) {
+            clearInterval(frameAnalysisInterval);
+            return;
+        }
+
+        const video = document.getElementById('webcam');
+        if (!video || !video.srcObject) return;
+
+        try {
+            // Shrink the image to 320x240 to drastically speed up network & backend inference
+            const offscreenCanvas = document.createElement('canvas');
+            offscreenCanvas.width = 320;
+            offscreenCanvas.height = 240;
+            const offCtx = offscreenCanvas.getContext('2d');
+            offCtx.drawImage(video, 0, 0, offscreenCanvas.width, offscreenCanvas.height);
+
+            const frameBlob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/jpeg', 0.6));
+            if (frameBlob) {
+                // Send to backend for YOLO analysis
+                const result = await API.analyzeFrame(frameBlob);
+                
+                    const faceAnalysis = result.face_analysis;
+                    const objectAnalysis = result.object_analysis;
+                    
+                    // Fallback to backend Face Analysis if frontend Mesh failed
+                    if (faceAnalysis && faceAnalysis.status !== 'skipped') {
+                        if (faceAnalysis.looking_away) {
+                            state.simulations.lookAway = true;
+                        }
+                        
+                        if (faceAnalysis.status === 'no_face') {
+                            if (!state.simulations.noFace) {
+                                state.simulations.noFace = true;
+                                const msg = 'Face missing. Return to the camera viewport.';
+                                if (!state.warnings.includes(msg)) {
+                                    state.warnings.unshift(msg);
+                                    showTopBanner('FACE NOT DETECTED');
+                                    updateWarningsList();
+                                }
+                            }
+                        } else if (faceAnalysis.status === 'multiple_faces') {
+                            if (!state.simulations.multipleFaces) {
+                                state.simulations.multipleFaces = true;
+                                const msg = 'Multiple people detected in frame!';
+                                if (!state.warnings.includes(msg)) {
+                                    state.warnings.unshift(msg);
+                                    showTopBanner('MULTIPLE PEOPLE DETECTED');
+                                    updateWarningsList();
+                                }
+                            }
+                        } else {
+                            // Reset backend triggers if face is good
+                            state.simulations.noFace = false;
+                            state.simulations.multipleFaces = false;
+                            state.warnings = state.warnings.filter(w => !w.includes('Face missing') && !w.includes('Multiple people'));
+                            updateWarningsList();
+                        }
+                    }
+
+                    if (objectAnalysis) {
+                        state.simulations.phoneUsage = objectAnalysis.phone_detected || false;
+                        
+                        // Handle new suspicious objects
+                        const newObjects = objectAnalysis.prohibited_objects || [];
+                        const oldObjects = state.simulations.prohibitedObjects || [];
+                        
+                        // Add warnings for newly detected objects
+                        newObjects.forEach(obj => {
+                            const warningMsg = `Suspicious object: ${obj.toUpperCase()}`;
+                            if (!state.warnings.includes(warningMsg)) {
+                                state.warnings.unshift(warningMsg);
+                                showTopBanner(warningMsg);
+                            }
+                        });
+                        
+                        // Remove warnings for objects that are no longer in frame
+                        oldObjects.forEach(obj => {
+                            if (!newObjects.includes(obj)) {
+                                const warningMsg = `Suspicious object: ${obj.toUpperCase()}`;
+                                state.warnings = state.warnings.filter(w => w !== warningMsg);
+                            }
+                        });
+                        
+                        state.simulations.prohibitedObjects = newObjects;
+                        updateWarningsList();
+                    }
+            }
+        } catch (error) {
+            console.debug('Optimized frame analysis failed:', error);
+        }
+    }, 600); // Super fast 600ms interval for near real-time detection without overloading
+}
+
+function showTopBanner(text) {
+    const banner = document.getElementById('cheatingWarning');
+    const textEl = document.getElementById('cheatingWarningText');
+    if (banner && textEl) {
+        textEl.textContent = text;
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+        setTimeout(() => {
+            banner.classList.add('hidden');
+            banner.classList.remove('flex');
+        }, 3500);
+    }
 }
 
 function toggleSimulation(type, isChecked) {
@@ -646,15 +818,27 @@ function startInterviewFlow() {
     }, 2200);
 }
 
-function speakText(text) {
+async function speakText(text) {
     if ('speechSynthesis' in window) {
         // Cancel current speech synthesis to avoid queuing overlap
         window.speechSynthesis.cancel();
-        
-        // Clean text of emojis and special bold markdown markers
-        let cleanText = text.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '');
-        cleanText = cleanText.replace(/\*\*/g, '').trim();
-        
+    }
+    
+    // Clean text of emojis and special bold markdown markers
+    let cleanText = text.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '');
+    cleanText = cleanText.replace(/\*\*/g, '').trim();
+    
+    try {
+        const response = await API.generateSpeech(cleanText);
+        if (response.status === 'success' && response.audio) {
+            playAudioFromBase64(response.audio);
+            return; // Successfully played with ElevenLabs
+        }
+    } catch (err) {
+        console.error("ElevenLabs TTS via backend failed, falling back to Web Speech", err);
+    }
+
+    if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
@@ -702,8 +886,10 @@ function addMessage(sender, text) {
 
 /* -------- Answer Submission & LLM Evaluation -------- */
 
-function submitAnswer() {
-    stopRecording(); 
+async function submitAnswer() {
+    if (state.isRecording) {
+        await stopRecording();
+    }
     
     const input = document.getElementById('textInput');
     let answerText = '';
@@ -735,108 +921,78 @@ async function processAnswer(userAnswer) {
     // Activate Evaluator status
     state.agentStatus.technicalEvaluator = 'analyzing';
     
-    let evaluation = null;
-    let followUpText = "";
-    
-    // A. Perform Gemini LLM Evaluation
     try {
-        const systemPrompt = `You are a strict technical interviewer. Compare the candidate's answer against the ideal answer for the question. Rate correctness, depth, and completeness on a scale of 0 to 10. Check if they mentioned the key concepts. Return strictly in JSON format matching this schema: {"correctness": number, "depth": number, "completeness": number, "score": number, "missingConcepts": ["string"], "comments": "string"}. Do not include markdown code block tags in your output, return raw JSON text.`;
+        const response = await API.submitAnswer(state.sessionId, userAnswer);
+        if (response.status !== 'success') throw new Error("Backend submission failed");
         
-        const prompt = `Question: "${currentQ.text}"\nIdeal Answer: "${currentQ.ideal}"\nCandidate Answer: "${userAnswer}"\nExpected Concepts: ${JSON.stringify(currentQ.concepts)}`;
-        
-        const rawEval = await callGemini(prompt, systemPrompt);
-        let cleanedEval = rawEval.replace(/```json/gi, '').replace(/```/g, '').trim();
-        
-        const result = JSON.parse(cleanedEval);
-        
-        evaluation = {
+        let evaluation = response.evaluation;
+        const ev = {
             question: currentQ.text,
             candidateAnswer: userAnswer,
-            idealAnswer: currentQ.ideal,
-            concepts: currentQ.concepts || [],
-            conceptsMentioned: (currentQ.concepts || []).filter(c => !result.missingConcepts.map(mc => mc.toLowerCase()).includes(c.toLowerCase())),
-            missingConcepts: result.missingConcepts,
-            correctness: result.correctness,
-            depth: result.depth,
-            completeness: result.completeness,
-            score: result.score
+            score: evaluation.rating || evaluation.score || 5,
+            feedback: evaluation.feedback || "Good response.",
         };
-        console.log("Gemini evaluation successful:", result);
-    } catch (e) {
-        console.warn("Gemini evaluation failed, calling offline fallback", e);
-        evaluation = evaluateAnswerAgainstIdeal(userAnswer, currentQ);
-    }
+        state.lastEvaluation = ev;
+        state.evaluations.push(ev);
+        
+        // Update global average metrics
+        state.metrics.technicalScore = Math.min(10.0, parseFloat(((state.metrics.technicalScore * (state.evaluations.length - 1) + ev.score) / state.evaluations.length).toFixed(1)));
+        
+        // Comm and Confidence evaluation logic
+        const wordCount = userAnswer.split(/\s+/).length;
+        const recordedWPM = state.metrics.speakingSpeed || 140;
+        state.metrics.speakingSpeed = Math.round((state.metrics.speakingSpeed + recordedWPM) / 2);
+        
+        let commScore = 9.5;
+        if (state.metrics.fillerWords > 7) commScore -= 2.0;
+        if (wordCount < 15) commScore -= 1.5;
+        state.metrics.communicationScore = Math.min(10.0, parseFloat(((state.metrics.communicationScore * (state.evaluations.length - 1) + commScore) / state.evaluations.length).toFixed(1)));
+        
+        let confScore = 9.8;
+        if (state.metrics.fillerWords > 5) confScore -= 1.5;
+        if (state.simulations.lookAway) confScore -= 2.0;
+        state.metrics.confidenceScore = Math.min(10.0, parseFloat(((state.metrics.confidenceScore * (state.evaluations.length - 1) + confScore) / state.evaluations.length).toFixed(1)));
+        
+        state.agentStatus.technicalEvaluator = 'idle';
+        renderActiveInterview();
 
-    state.lastEvaluation = evaluation;
-    state.evaluations.push(evaluation);
-
-    // Update global average metrics
-    state.metrics.technicalScore = Math.min(10.0, parseFloat(((state.metrics.technicalScore * (state.evaluations.length - 1) + evaluation.score) / state.evaluations.length).toFixed(1)));
-    
-    // Comm evaluation
-    const wordCount = userAnswer.split(/\s+/).length;
-    const recordedWPM = state.metrics.speakingSpeed || 140;
-    state.metrics.speakingSpeed = Math.round((state.metrics.speakingSpeed + recordedWPM) / 2);
-    
-    let commScore = 9.5;
-    if (state.metrics.fillerWords > 7) commScore -= 2.0;
-    if (wordCount < 15) commScore -= 1.5;
-    
-    state.metrics.communicationScore = Math.min(10.0, parseFloat(((state.metrics.communicationScore * (state.evaluations.length - 1) + commScore) / state.evaluations.length).toFixed(1)));
-    
-    // Confidence evaluation
-    let confScore = 9.8;
-    if (state.metrics.fillerWords > 5) confScore -= 1.5;
-    if (state.simulations.lookAway) confScore -= 2.0;
-    state.metrics.confidenceScore = Math.min(10.0, parseFloat(((state.metrics.confidenceScore * (state.evaluations.length - 1) + confScore) / state.evaluations.length).toFixed(1)));
-    
-    state.agentStatus.technicalEvaluator = 'idle';
-    renderActiveInterview();
-
-    // B. Call Gemini for Dynamic Follow-up Generation if this wasn't already a follow-up
-    if (!state.isFollowUpActive) {
-        try {
-            state.agentStatus.questionGenerator = 'generating';
-            const systemPrompt = `You are a technical interviewer. Formulate a brief, context-aware follow-up question based on the candidate's last answer. Keep it natural, conversational, and direct. Max 2 sentences. If the answer is extremely brief or evasive, ask them to elaborate. Return strictly raw question text.`;
-            
-            const prompt = `Question: "${currentQ.text}"\nCandidate's response: "${userAnswer}"`;
-            followUpText = await callGemini(prompt, systemPrompt);
+        if (response.action === 'follow_up') {
             state.isFollowUpActive = true;
             state.agentStatus.questionGenerator = 'idle';
-        } catch (err) {
-            console.warn("Failed to generate follow-up via Gemini, selecting local template", err);
-            followUpText = "Interesting details. How would you secure and scale this setup in a production server?";
-            state.isFollowUpActive = true;
+            setTimeout(() => {
+                if (typing) typing.classList.add('hidden');
+                addMessage('ai', response.follow_up_question);
+            }, 1500);
+        } else {
+            state.isFollowUpActive = false;
+            setTimeout(() => {
+                if (response.next_question_available) {
+                    state.currentQuestion++;
+                    if (typing) typing.classList.add('hidden');
+                    let nextText = response.next_question;
+                    if (typeof nextText === 'object') nextText = nextText.primary_question || nextText.text;
+                    addMessage('ai', nextText);
+                    render();
+                } else {
+                    if (typing) typing.classList.add('hidden');
+                    addMessage('ai', `Thank you Goutham. We have completed the interview workflow. The orchestrator is compiling agent reports and building your feedback report...`);
+                    setTimeout(() => {
+                        state.step = 5;
+                        render();
+                        if (typeof renderResults === 'function') {
+                            renderResults();
+                        }
+                    }, 4000);
+                }
+            }, 1500);
         }
         
-        setTimeout(() => {
-            if (typing) typing.classList.add('hidden');
-            addMessage('ai', followUpText);
-        }, 1500);
-        return;
+    } catch (e) {
+        console.error("Backend evaluation failed", e);
+        state.agentStatus.technicalEvaluator = 'idle';
+        if (typing) typing.classList.add('hidden');
+        alert("Backend submission failed. Ensure the server is running.");
     }
-
-    // C. Transition to Next Main Question
-    state.isFollowUpActive = false; // reset follow-up flag
-    
-    setTimeout(() => {
-        if (state.currentQuestion < state.questions.length - 1) {
-            state.currentQuestion++;
-            if (typing) typing.classList.add('hidden');
-            addMessage('ai', state.questions[state.currentQuestion].text);
-            render();
-        } else {
-            if (typing) typing.classList.add('hidden');
-            addMessage('ai', `Thank you Goutham. We have completed the interview workflow. The orchestrator is compiling agent reports and building your feedback report...`);
-            
-            state.agentStatus.feedbackGenerator = 'generating';
-            state.agentStatus.reportGenerator = 'generating';
-            
-            setTimeout(() => {
-                endInterview();
-            }, 3000);
-        }
-    }, 1500);
 }
 
 /**
@@ -882,6 +1038,7 @@ function endInterview() {
     
     if (cvAnimationId) cancelAnimationFrame(cvAnimationId);
     if (cheatCheckInterval) clearInterval(cheatCheckInterval);
+    if (frameAnalysisInterval) clearInterval(frameAnalysisInterval);
     
     // Close MediaPipe instances if they exist
     if (cameraInstance) {
@@ -936,25 +1093,30 @@ function _cameraPanel() {
             <span>CV FEED ACTIVE</span>
         </div>
         
-        <div class="absolute top-3 right-3 flex flex-col gap-1.5 z-20">
-            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-2.5 py-1 border border-surface-800 text-[10px] font-mono flex items-center justify-between min-w-[120px]">
-                <span class="text-surface-500">Eye Gaze:</span>
-                <span class="text-success-400 ml-1 font-semibold" id="liveEyeContact">--%</span>
-            </div>
-            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-2.5 py-1 border border-surface-800 text-[10px] font-mono flex items-center justify-between min-w-[120px]">
-                <span class="text-surface-500">Filler Words:</span>
-                <span class="text-warning-400 ml-1 font-semibold" id="liveFillerWords">0</span>
-            </div>
-            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-2.5 py-1 border border-surface-800 text-[10px] font-mono flex items-center justify-between min-w-[120px]">
-                <span class="text-surface-500">WPM Rate:</span>
-                <span class="text-accent-400 ml-1 font-semibold" id="liveWPM">--</span>
+        <div class="absolute top-3 right-3 z-20">
+            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-surface-800 text-[10px] font-mono">
+                <span class="text-surface-500">Session:</span>
+                <span class="text-accent-400 ml-2 font-semibold">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
             </div>
         </div>
         
-        <!-- Cheating warning overlay banner -->
+        <!-- Premium Cheating Warning HUD -->
         <div id="cheatingWarning"
-            class="absolute bottom-4 left-1/2 -translate-x-1/2 bg-danger-500/90 backdrop-blur-sm text-white text-xs font-semibold px-4 py-2.5 rounded-lg hidden shadow-lg shadow-danger-500/10 border border-danger-400/20 z-20 transition-all font-mono">
-            ⚠️ PLEASE MAINTAIN EYE CONTACT
+            class="absolute inset-0 bg-danger-900/40 backdrop-blur-md hidden flex-col items-center justify-center z-[100] transition-all duration-300">
+            <!-- Pulsing outer ring -->
+            <div class="absolute inset-0 border-4 border-danger-500/50 animate-pulse"></div>
+            
+            <div class="bg-surface-950/90 border border-danger-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(244,63,94,0.5)] flex flex-col items-center transform scale-110">
+                <div class="w-16 h-16 rounded-full bg-danger-500/20 flex items-center justify-center mb-4 animate-bounce">
+                    <span class="text-danger-500 text-3xl">⚠️</span>
+                </div>
+                <div id="cheatingWarningText" class="text-danger-400 text-lg font-bold font-mono tracking-widest text-center uppercase shadow-black drop-shadow-md">
+                    PLEASE MAINTAIN EYE CONTACT
+                </div>
+                <div class="text-surface-400 text-xs font-mono mt-2 tracking-wide uppercase">
+                    Security protocol active
+                </div>
+            </div>
         </div>
     </div>`;
 }
@@ -984,7 +1146,7 @@ function _chatPanel(question) {
                 <span class="w-2 h-2 bg-success-500 rounded-full"></span>
                 <span class="text-white text-xs font-semibold uppercase tracking-wider">AI Dialogue Interface</span>
             </div>
-            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Llama 3 & Gemini 1.5</span>
+            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Llama 3 (Groq)</span>
         </div>
 
         <div id="chatContainer" class="p-4 space-y-3.5 max-h-72 overflow-y-auto" style="min-height:220px">
@@ -1039,31 +1201,7 @@ function _questionInfo(question) {
 }
 
 function _simulationPanel() {
-    return `
-    <div class="glass rounded-xl p-4 border border-surface-800">
-        <div class="text-white text-xs font-semibold mb-2 uppercase tracking-wider font-mono flex items-center gap-1.5">
-            <span class="w-1.5 h-1.5 bg-accent-500 rounded-full"></span>
-            Integrity Simulator
-        </div>
-        <div class="grid grid-cols-2 gap-2 text-[11px]">
-            <label class="flex items-center gap-2 p-2 bg-surface-900 border border-surface-800 rounded-lg cursor-pointer hover:border-surface-700 transition-all">
-                <input type="checkbox" id="check-look" onchange="toggleSimulation('lookAway', this.checked)" ${state.simulations.lookAway ? 'checked' : ''} class="rounded bg-surface-950 border-surface-700 text-accent-600 focus:ring-accent-600/30">
-                <span class="text-surface-300">Look Away</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 bg-surface-900 border border-surface-800 rounded-lg cursor-pointer hover:border-surface-700 transition-all">
-                <input type="checkbox" id="check-noface" onchange="toggleSimulation('noFace', this.checked)" ${state.simulations.noFace ? 'checked' : ''} class="rounded bg-surface-950 border-surface-700 text-accent-600 focus:ring-accent-600/30">
-                <span class="text-surface-300">Hide Face</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 bg-surface-900 border border-surface-800 rounded-lg cursor-pointer hover:border-surface-700 transition-all">
-                <input type="checkbox" id="check-multi" onchange="toggleSimulation('multipleFaces', this.checked)" ${state.simulations.multipleFaces ? 'checked' : ''} class="rounded bg-surface-950 border-surface-700 text-accent-600 focus:ring-accent-600/30">
-                <span class="text-surface-300">Second Face</span>
-            </label>
-            <label class="flex items-center gap-2 p-2 bg-surface-900 border border-surface-800 rounded-lg cursor-pointer hover:border-surface-700 transition-all">
-                <input type="checkbox" id="check-phone" onchange="toggleSimulation('phoneUsage', this.checked)" ${state.simulations.phoneUsage ? 'checked' : ''} class="rounded bg-surface-950 border-surface-700 text-accent-600 focus:ring-accent-600/30">
-                <span class="text-surface-300">Mobile Phone</span>
-            </label>
-        </div>
-    </div>`;
+    return ''; // Removed - Integrity Simulator no longer needed
 }
 
 function _liveMetrics() {
@@ -1071,8 +1209,7 @@ function _liveMetrics() {
     const bars = [
         { label: 'Technical Score', value: m.technicalScore,     color: 'accent-600',   id: 'metric-tech', barId: 'bar-tech' },
         { label: 'Communication',   value: m.communicationScore, color: 'success-500',  id: 'metric-comm', barId: 'bar-comm' },
-        { label: 'Confidence',      value: m.confidenceScore,    color: 'warning-500',  id: 'metric-conf', barId: 'bar-conf' },
-        { label: 'Eye Contact',     value: m.eyeContactScore,    color: 'accent-400',   id: 'metric-eye',  barId: 'bar-eye'  }
+        { label: 'Confidence',      value: m.confidenceScore,    color: 'warning-500',  id: 'metric-conf', barId: 'bar-conf' }
     ];
     return `
     <div class="glass rounded-xl p-4 border border-surface-800">
@@ -1099,7 +1236,7 @@ function _ragEvaluatorPanel() {
     if (!evalObj) {
         contentHtml = `
             <div class="text-center py-6 text-surface-500 text-xs italic">
-                Waiting for candidate response to evaluate against Gemini RAG Ideal Bank...
+                Waiting for candidate response to evaluate against Llama 3 RAG Ideal Bank...
             </div>
         `;
     } else {
@@ -1145,7 +1282,7 @@ function _ragEvaluatorPanel() {
     <div class="glass rounded-xl p-4 border border-surface-800 bg-surface-900/10">
         <div class="text-white text-xs font-semibold mb-2 uppercase tracking-wider font-mono flex items-center justify-between">
             <span>RAG Evaluator Agent Logs</span>
-            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono animate-pulse">Gemini 1.5</span>
+            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono animate-pulse">Llama 3 (Groq)</span>
         </div>
         ${contentHtml}
     </div>`;

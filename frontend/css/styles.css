@@ -5,22 +5,26 @@
 /* ---------- Scrollbar ---------- */
 * {
     scrollbar-width: thin;
-    scrollbar-color: #404040 #171717;
+    scrollbar-color: #334155 #0f172a;
 }
 *::-webkit-scrollbar { width: 6px; }
-*::-webkit-scrollbar-track { background: #171717; }
-*::-webkit-scrollbar-thumb { background: #404040; border-radius: 3px; }
+*::-webkit-scrollbar-track { background: #0f172a; }
+*::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
 /* ---------- Glassmorphism ---------- */
 .glass {
-    background: rgba(23, 23, 23, 0.6);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(15, 23, 42, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
 }
 .glass-light {
-    background: rgba(255,255,255,0.03);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(255,255,255,0.05);
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.15);
 }
 
 /* ---------- Pulse Ring ---------- */
@@ -132,6 +136,16 @@ input[type="file"] { display: none; }
 
 /* ---------- Grid Background ---------- */
 .bg-grid {
-    background-image: radial-gradient(rgba(51, 163, 255, 0.1) 1px, transparent 1px);
-    background-size: 16px 16px;
+    background-image: 
+        radial-gradient(rgba(99, 102, 241, 0.15) 1px, transparent 1px),
+        radial-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px);
+    background-size: 32px 32px;
+    background-position: 0 0, 16px 16px;
+    background-color: transparent;
+}
+
+body {
+    background: radial-gradient(circle at 50% 0%, #0f172a 0%, #020617 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
 }

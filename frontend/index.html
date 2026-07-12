@@ -13,7 +13,7 @@
     <!-- PDF.js for resume text extraction -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
     
-    <!-- MediaPipe for real camera face tracking and eye gaze mesh -->
+    <!-- AI Models -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
     <script>
@@ -25,11 +25,11 @@
                         mono: ['JetBrains Mono', 'monospace'],
                     },
                     colors: {
-                        surface: { 50: '#fafafa', 100: '#f5f5f5', 200: '#e5e5e5', 300: '#d4d4d4', 400: '#a3a3a3', 500: '#737373', 600: '#525252', 700: '#404040', 800: '#262626', 900: '#171717', 950: '#0a0a0a' },
-                        accent: { 50: '#eef9ff', 100: '#d9f2ff', 200: '#bce7ff', 300: '#8ed9ff', 400: '#59c3ff', 500: '#33a3ff', 600: '#1a80f0', 700: '#1467d9', 800: '#1755b1', 900: '#19498b' },
-                        success: { 400: '#4ade80', 500: '#22c55e' },
-                        warning: { 400: '#facc15', 500: '#eab308' },
-                        danger: { 400: '#f87171', 500: '#ef4444' }
+                        surface: { 50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0', 300: '#cbd5e1', 400: '#94a3b8', 500: '#64748b', 600: '#475569', 700: '#334155', 800: '#1e293b', 900: '#0f172a', 950: '#020617' },
+                        accent: { 50: '#eef2ff', 100: '#e0e7ff', 200: '#c7d2fe', 300: '#a5b4fc', 400: '#818cf8', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 800: '#3730a3', 900: '#312e81', 950: '#1e1b4b' },
+                        success: { 400: '#34d399', 500: '#10b981' },
+                        warning: { 400: '#fbbf24', 500: '#f59e0b' },
+                        danger: { 400: '#fb7185', 500: '#f43f5e' }
                     }
                 }
             }
@@ -41,17 +41,18 @@
 <div id="app"></div>
 
 <!-- Core modules (order matters) -->
-<script src="js/state.js?v=1.3"></script>
-<script src="js/data.js?v=1.3"></script>
-<script src="js/router.js?v=1.3"></script>
+<script src="js/state.js?v=1.5"></script>
+<script src="js/data.js?v=1.5"></script>
+<script src="js/router.js?v=1.5"></script>
+<script src="js/api-service.js?v=1.5"></script>
 
 <!-- Page renderers -->
-<script src="pages/landing.js?v=1.3"></script>
-<script src="pages/upload.js?v=1.3"></script>
-<script src="pages/analysis.js?v=1.3"></script>
-<script src="pages/setup.js?v=1.3"></script>
-<script src="pages/interview.js?v=1.3"></script>
-<script src="pages/results.js?v=1.3"></script>
+<script src="pages/landing.js?v=1.5"></script>
+<script src="pages/upload.js?v=1.5"></script>
+<script src="pages/analysis.js?v=1.5"></script>
+<script src="pages/setup.js?v=1.5"></script>
+<script src="pages/interview.js?v=1.5"></script>
+<script src="pages/results.js?v=1.5"></script>
 
 <!-- Init -->
 <script>

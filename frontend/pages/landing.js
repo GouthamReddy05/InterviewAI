@@ -66,98 +66,10 @@ function renderLanding() {
             </div>
         </main>
 
-        <!-- Features -->
-        <section id="features" class="py-20 border-t border-surface-800/50">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-2xl font-bold text-white text-center mb-12">Everything you need to ace your next interview</h2>
-                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    ${_featureCards()}
-                </div>
-            </div>
-        </section>
-
-        <!-- How it works -->
-        <section id="how-it-works" class="py-20 border-t border-surface-800/50">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-2xl font-bold text-white text-center mb-12">How it works</h2>
-                <div class="max-w-3xl mx-auto">${_howItWorksSteps()}</div>
-            </div>
-        </section>
-
-        <!-- Agents -->
-        <section id="agents" class="py-20 border-t border-surface-800/50">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <h2 class="text-2xl font-bold text-white text-center mb-4">Multi-Agent Architecture</h2>
-                <p class="text-surface-400 text-center text-sm mb-12 max-w-xl mx-auto">Seven specialized AI agents working together to simulate a real interview experience</p>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">${_agentCards()}</div>
-            </div>
-        </section>
-
         <!-- Footer -->
-        <footer class="py-8 border-t border-surface-800/50 text-center text-surface-600 text-sm">
+        <footer class="py-8 border-t border-surface-800/50 text-center text-surface-600 text-sm mt-auto">
             <p>InterviewAI — Multi-Modal AI Mock Interview Simulator</p>
         </footer>
     </div>
     `;
-}
-
-/* ---- private helpers ---- */
-
-function _featureCards() {
-    const features = [
-        { icon: '🎯', title: 'Technical Evaluation',    desc: 'AI evaluates your answers against ideal responses with scoring on correctness, depth, and completeness.' },
-        { icon: '🎙️', title: 'Communication Analysis',  desc: 'Tracks speaking speed, filler words, pauses, and overall communication effectiveness.' },
-        { icon: '👁️', title: 'Body Language Tracking',  desc: 'Monitors eye contact, face position, and detects looking-away behavior in real-time.' },
-        { icon: '🧠', title: 'Emotion Detection',       desc: 'Analyzes facial expressions to gauge confidence, nervousness, and emotional state.' },
-        { icon: '🔍', title: 'Cheating Detection',      desc: 'Detects multiple faces, mobile usage, and suspicious behavior during interviews.' },
-        { icon: '📊', title: 'Personalized Feedback',   desc: 'Generates detailed improvement plans with specific recommendations based on your performance.' }
-    ];
-    return features.map(f => `
-        <div class="glass rounded-xl p-6 hover:bg-surface-800/30 transition-all group">
-            <div class="text-2xl mb-4 group-hover:scale-110 transition-transform">${f.icon}</div>
-            <h3 class="text-white font-medium mb-2">${f.title}</h3>
-            <p class="text-surface-400 text-sm leading-relaxed">${f.desc}</p>
-        </div>
-    `).join('');
-}
-
-function _howItWorksSteps() {
-    const steps = [
-        { num: '01', title: 'Upload Resume',        desc: "Upload your resume and select the job role you're preparing for." },
-        { num: '02', title: 'AI Analysis',          desc: 'Our agents extract skills, projects, and experience from your resume.' },
-        { num: '03', title: 'Mock Interview',       desc: 'AI interviewer asks questions based on your resume, role, and difficulty level.' },
-        { num: '04', title: 'Real-time Monitoring', desc: 'Face tracking, communication analysis, and cheating detection run simultaneously.' },
-        { num: '05', title: 'Detailed Report',      desc: 'Get comprehensive scores, feedback, and a personalized improvement plan.' }
-    ];
-    return steps.map((s, i) => `
-        <div class="flex gap-6 mb-8 last:mb-0 fade-in" style="animation-delay:${i * 0.1}s">
-            <div class="flex flex-col items-center">
-                <div class="w-10 h-10 rounded-full bg-accent-600/20 text-accent-400 flex items-center justify-center font-mono text-sm font-bold">${s.num}</div>
-                ${i < 4 ? '<div class="w-px h-12 bg-surface-700 mt-2"></div>' : ''}
-            </div>
-            <div class="pb-8">
-                <h3 class="text-white font-medium mb-1">${s.title}</h3>
-                <p class="text-surface-400 text-sm">${s.desc}</p>
-            </div>
-        </div>
-    `).join('');
-}
-
-function _agentCards() {
-    const agents = [
-        { name: 'Resume Analyzer',        icon: '📄', tech: 'NLP, Llama, LangChain' },
-        { name: 'Question Generator',     icon: '❓', tech: 'Llama, LangChain' },
-        { name: 'AI Interviewer',         icon: '🤖', tech: 'Llama 3, LangChain' },
-        { name: 'Technical Evaluator',    icon: '⚙️', tech: 'Llama, LangChain, RAG' },
-        { name: 'Communication Evaluator',icon: '🎙️', tech: 'Whisper, Speech Analysis' },
-        { name: 'Face Monitor',           icon: '👁️', tech: 'OpenCV, MediaPipe' },
-        { name: 'Report Generator',       icon: '📊', tech: 'Llama, LangGraph' }
-    ];
-    return agents.map(a => `
-        <div class="glass rounded-lg p-4 text-center hover:border-accent-600/30 transition-all">
-            <div class="text-2xl mb-2">${a.icon}</div>
-            <div class="text-white text-sm font-medium">${a.name}</div>
-            <div class="text-surface-500 text-xs mt-1 font-mono">${a.tech}</div>
-        </div>
-    `).join('');
 }

@@ -96,92 +96,24 @@ async function simulateAnalysis() {
     }
 
     try {
-        // --- STEP 1: RESUME ANALYZER (Gemini API) ---
-        logMessage(`> [System] Spawning Agent: Resume Analyzer...`, 'system');
-        updateAgentProgress('resumeAnalyzer', 20, 'Initializing');
+        logMessage(`> [System] Spawning Agentic System...`, 'system');
         
-        await new Promise(r => setTimeout(r, 600));
-        logMessage(`> [Resume Analyzer] Querying LLM (Gemini 1.5 Flash) for parsing...`);
-        updateAgentProgress('resumeAnalyzer', 50, 'Calling Gemini');
-        
-        let extractedProfile = {
-            name: state.candidateName || "Candidate",
-            skills: ['Python', 'TensorFlow', 'SQL'],
-            projects: ['Crop Disease Detection', 'JobSphere'],
-            experience: '1 year experience'
-        };
-        
-        try {
-            const systemPrompt = `You are a professional resume parser. Parse the provided resume text and extract the candidate name, up to 8 core technical skills, up to 3 project names, and a brief 1-sentence experience summary. Respond strictly in valid JSON format matching this schema: {"name": "string", "skills": ["string"], "projects": ["string"], "experience": "string"}. Do not include markdown code block syntax (like \`\`\`json) in your response, just return raw JSON text.`;
-            
-            const rawResponse = await callGemini(
-                `Resume text to analyze: \n ${state.resumeRawText || "Resume for " + (state.candidateName || "Goutham")}`, 
-                systemPrompt
-            );
-            
-            // Clean markdown wrap if any
-            let jsonText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-            extractedProfile = JSON.parse(jsonText);
-            
-            logMessage(`> [Resume Analyzer] Parse successful! Candidate: ${extractedProfile.name}`, 'success');
-            logMessage(`> [Resume Analyzer] Extracted Skills: ${extractedProfile.skills.join(', ')}`);
-            logMessage(`> [Resume Analyzer] Extracted Projects: ${extractedProfile.projects.join(', ')}`);
-        } catch (e) {
-            console.warn("Resume parsing via Gemini failed, using defaults", e);
-            logMessage(`> [Resume Analyzer] API warning: Falling back to profile templates...`, 'error');
-            // Mock templates based on selection to guarantee robust runs
-            if (state.tempExtracted) {
-                extractedProfile.skills = state.tempExtracted.skills;
-                extractedProfile.projects = state.tempExtracted.projects;
-                extractedProfile.experience = state.tempExtracted.experience;
-            }
-        }
-        
-        state.candidateName = extractedProfile.name;
-        state.skills = extractedProfile.skills;
-        state.projects = extractedProfile.projects;
-        state.experience = extractedProfile.experience;
-        
-        updateAgentProgress('resumeAnalyzer', 100, 'Complete', true);
-        await new Promise(r => setTimeout(r, 600));
+        // --- STEP 1 & 2: Backend Upload and Generation ---
+        logMessage(`> [Backend] Uploading resume and generating questions...`);
+        updateAgentProgress('resumeAnalyzer', 30, 'Uploading');
+        updateAgentProgress('questionGenerator', 30, 'Waiting');
 
-        // --- STEP 2: QUESTION GENERATOR (Gemini API) ---
-        logMessage(`> [System] Spawning Agent: Question Generator...`, 'system');
-        updateAgentProgress('questionGenerator', 20, 'Initializing');
-        
-        await new Promise(r => setTimeout(r, 600));
-        logMessage(`> [Question Generator] Calling Gemini to formulate 6 tailored questions...`);
-        updateAgentProgress('questionGenerator', 50, 'Generating Qs');
+        await uploadResumeToBackend();
 
-        let dynamicQuestions = [];
-        
-        try {
-            const systemPrompt = `You are a technical interviewer conducting a ${state.difficulty} difficulty interview for the role of ${state.jobRole}. Generate exactly 6 highly relevant, tailored questions based on the candidate's profile. At least one question must ask directly about their projects (e.g. ${state.projects[0] || 'projects'}), and one question must cover applying their skills (e.g. ${state.skills[0] || 'skills'}) in a high-scale production setting. Return strictly in JSON format as a list of 6 objects matching this schema: [{"text": "Question text", "ideal": "A detailed ideal response text used for scoring", "concepts": ["key concept 1", "key concept 2"]}]. Do not include markdown code block syntax in your response, return raw JSON text.`;
-            
-            const prompt = `Candidate Profile:\nName: ${state.candidateName}\nSkills: ${state.skills.join(', ')}\nProjects: ${state.projects.join(', ')}\nExperience: ${state.experience}`;
-            
-            const rawResponse = await callGemini(prompt, systemPrompt);
-            let jsonText = rawResponse.replace(/```json/gi, '').replace(/```/g, '').trim();
-            
-            dynamicQuestions = JSON.parse(jsonText);
-            
-            logMessage(`> [Question Generator] Successfully created 6 custom questions with RAG ideal answer frameworks!`, 'success');
-        } catch (e) {
-            console.warn("Question generation via Gemini failed, calling offline generator fallback", e);
-            logMessage(`> [Question Generator] API warning: Falling back to offline question bank...`, 'error');
-            generateQuestions(); // populates state.questions with bank questions
-            dynamicQuestions = state.questions;
+        if (state.questions && state.questions.length > 0) {
+            logMessage(`> [Resume Analyzer] Parse successful!`, 'success');
+            updateAgentProgress('resumeAnalyzer', 100, 'Complete', true);
+
+            logMessage(`> [Question Generator] Successfully retrieved ${state.questions.length} tailored questions from backend!`, 'success');
+            updateAgentProgress('questionGenerator', 100, 'Complete', true);
+        } else {
+            throw new Error("Failed to get questions from backend");
         }
-        
-        // Save questions in state
-        state.questions = dynamicQuestions.map(q => ({
-            text: q.text,
-            ideal: q.ideal || "Candidate should demonstrate conceptual understanding.",
-            concepts: q.concepts || []
-        }));
-        
-        updateAgentProgress('questionGenerator', 100, 'Complete', true);
-        await new Promise(r => setTimeout(r, 600));
 
         // --- STEP 3: FACE MONITORING AGENT (MediaPipe CV setup) ---
         logMessage(`> [System] Spawning Agent: Face Monitoring Agent...`, 'system');
@@ -205,11 +137,7 @@ async function simulateAnalysis() {
         logMessage(`> [System Error] Critical orchestrator failure: ${globalError.message}`, 'error');
         console.error("Critical simulation error", globalError);
         
-        // Complete fallbacks
-        generateQuestions();
-        setTimeout(() => {
-            state.step = 3;
-            render();
-        }, 3000);
+        logMessage(`> [System] HALTING: Please check the backend server.`, 'error');
+        alert("Backend API failed. Please ensure the Python server is running.");
     }
 }
