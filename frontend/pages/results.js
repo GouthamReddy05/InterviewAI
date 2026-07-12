@@ -26,6 +26,12 @@ function renderResults() {
     const overall = Math.max(0, Math.round(baseScore - penalty));
     const overallGrade = overall >= 90 ? 'A+' : overall >= 80 ? 'A' : overall >= 70 ? 'B' : overall >= 60 ? 'C' : 'F (Cheating Flagged)';
     
+    // Save to backend to mark session as completed and store score
+    if (!state.sessionEnded && state.sessionId) {
+        state.sessionEnded = true;
+        API.endSession(state.sessionId, overall).catch(err => console.error("Failed to save final score", err));
+    }
+    
     let overallColor = 'text-success-400';
     let gradeBorderColor = 'border-success-500/30';
     if (overall < 60) {

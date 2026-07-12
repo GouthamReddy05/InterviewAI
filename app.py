@@ -14,6 +14,15 @@ dotenv.load_dotenv()
 # Add dummy folder to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dummy'))
 
+import database
+import db_models
+import auth
+import auth_routes
+import admin_routes
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from pydantic import BaseModel
+
 from question_generator import InterviewSessionManager
 from models import (
     AnswerSubmissionRequest,
@@ -57,6 +66,15 @@ face_mesh = mp_face_mesh.FaceMesh(
 
 # Load YOLOv8 model
 model_path = "dummy/yolov8n.pt" if os.path.exists("dummy/yolov8n.pt") else "yolov8n.pt"
+
+# Patch torch.load to fix PyTorch 2.6 weights_only=True compatibility issue with ultralytics
+import torch
+_original_torch_load = torch.load
+def _patched_torch_load(*args, **kwargs):
+    kwargs['weights_only'] = False
+    return _original_torch_load(*args, **kwargs)
+torch.load = _patched_torch_load
+
 yolo_model = YOLO(model_path)
 
 # Initialize Whisper
@@ -66,7 +84,14 @@ whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
 elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY", "dbb0dafcd098a4b61eac7c9c038282f29ed39950fd87301d0ff6b65b1d8095a0")
 elevenlabs_client = ElevenLabs(api_key=elevenlabs_api_key)
 
+# Create database tables
+database.Base.metadata.create_all(bind=database.engine)
+
 app = FastAPI(title="InterviewAI", version="1.0.0")
+
+# Include routers
+app.include_router(auth_routes.router)
+app.include_router(admin_routes.router)
 
 # Enable CORS
 app.add_middleware(
@@ -108,7 +133,9 @@ async def favicon():
 async def upload_resume(
     resume: UploadFile = File(...),
     job_role: str = Form(...),
-    resume_text: str = Form(None)
+    resume_text: str = Form(None),
+    current_user: db_models.User = Depends(auth.get_current_user),
+    db: Session = Depends(database.get_db)
 ):
     """
     Upload resume and start interview session.
@@ -132,6 +159,17 @@ async def upload_resume(
             job_role=job_role,
             resume_name=resume.filename
         )
+        
+        # Save to database
+        db_interview = db_models.InterviewSessionModel(
+            session_id=session.session_id,
+            user_id=current_user.id,
+            resume_name=resume.filename,
+            job_role=job_role,
+            status="in_progress"
+        )
+        db.add(db_interview)
+        db.commit()
         
         # Format all questions for frontend
         questions = []
@@ -381,7 +419,10 @@ async def get_improvement_plan(session_id: str):
 
 
 @app.get("/api/session/{session_id}/comprehensive-report")
-async def get_comprehensive_report(session_id: str):
+async def get_comprehensive_report(
+    session_id: str,
+    db: Session = Depends(database.get_db)
+):
     """
     Get comprehensive interview report with scores, analysis, and improvements.
     """
@@ -407,11 +448,40 @@ async def get_comprehensive_report(session_id: str):
             "improvement_plan": improvement_plan
         }
         
+        # Update database
+        db_interview = db.query(db_models.InterviewSessionModel).filter(db_models.InterviewSessionModel.session_id == session_id).first()
+        if db_interview:
+            db_interview.status = "completed"
+            db_interview.score = scores.get("overall_score")
+            db.commit()
+        
         return JSONResponse({
             "status": "success",
             "report": comprehensive_report
         })
     
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class EndSessionRequest(BaseModel):
+    score: float
+
+@app.post("/api/session/{session_id}/end")
+async def end_session(
+    session_id: str,
+    request: EndSessionRequest,
+    db: Session = Depends(database.get_db)
+):
+    try:
+        db_interview = db.query(db_models.InterviewSessionModel).filter(db_models.InterviewSessionModel.session_id == session_id).first()
+        if db_interview:
+            db_interview.status = "completed"
+            db_interview.score = request.score
+            db.commit()
+            return {"status": "success"}
+        else:
+            raise HTTPException(status_code=404, detail="Interview not found")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

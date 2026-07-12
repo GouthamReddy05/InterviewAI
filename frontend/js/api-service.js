@@ -8,6 +8,15 @@
 const API = {
     BASE_URL: '/api',
 
+    getHeaders(extraHeaders = {}) {
+        const token = localStorage.getItem('interviewai_token');
+        const headers = { ...extraHeaders };
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        return headers;
+    },
+
     /**
      * Upload resume and create interview session
      */
@@ -15,8 +24,13 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/upload-resume`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
+            if (response.status === 401) {
+                this.handleUnauthorized();
+                return { status: 'error', detail: 'Unauthorized' };
+            }
             return await response.json();
         } catch (error) {
             console.error('Resume upload error:', error);
@@ -24,11 +38,21 @@ const API = {
         }
     },
 
+    handleUnauthorized() {
+        localStorage.removeItem('interviewai_token');
+        if (typeof state !== 'undefined' && typeof render !== 'undefined') {
+            state.step = 6; // Login page
+            render();
+        } else {
+            window.location.reload();
+        }
+    },
+
     /**
      * Get current question for a session
      */
     async getCurrentQuestion(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/question`);
+        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/question`, { headers: this.getHeaders() });
         return await response.json();
     },
 
@@ -38,9 +62,9 @@ const API = {
     async submitAnswer(sessionId, answer) {
         const response = await fetch(`${this.BASE_URL}/session/${sessionId}/answer`, {
             method: 'POST',
-            headers: {
+            headers: this.getHeaders({
                 'Content-Type': 'application/json'
-            },
+            }),
             body: JSON.stringify({ answer })
         });
         return await response.json();
@@ -51,7 +75,8 @@ const API = {
      */
     async nextQuestion(sessionId) {
         const response = await fetch(`${this.BASE_URL}/session/${sessionId}/next-question`, {
-            method: 'POST'
+            method: 'POST',
+            headers: this.getHeaders()
         });
         return await response.json();
     },
@@ -60,7 +85,7 @@ const API = {
      * Get interview progress
      */
     async getProgress(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/progress`);
+        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/progress`, { headers: this.getHeaders() });
         return await response.json();
     },
 
@@ -68,7 +93,7 @@ const API = {
      * Get interview scores
      */
     async getScores(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/scores`);
+        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/scores`, { headers: this.getHeaders() });
         return await response.json();
     },
 
@@ -76,8 +101,27 @@ const API = {
      * Get comprehensive report
      */
     async getComprehensiveReport(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/comprehensive-report`);
+        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/comprehensive-report`, { headers: this.getHeaders() });
         return await response.json();
+    },
+
+    /**
+     * End interview session and save score
+     */
+    async endSession(sessionId, finalScore) {
+        try {
+            const response = await fetch(`${this.BASE_URL}/session/${sessionId}/end`, {
+                method: 'POST',
+                headers: this.getHeaders({
+                    'Content-Type': 'application/json'
+                }),
+                body: JSON.stringify({ score: finalScore })
+            });
+            return await response.json();
+        } catch (error) {
+            console.error('End session error:', error);
+            return { status: 'error' };
+        }
     },
 
     // ========================================
@@ -94,6 +138,7 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/detect-face`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
             return await response.json();
@@ -116,6 +161,7 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/detect-objects`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
             return await response.json();
@@ -138,6 +184,7 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/analyze-frame`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
             return await response.json();
@@ -165,6 +212,7 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/transcribe-audio`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
             return await response.json();
@@ -188,6 +236,7 @@ const API = {
         try {
             const response = await fetch(`${this.BASE_URL}/generate-speech`, {
                 method: 'POST',
+                headers: this.getHeaders(),
                 body: formData
             });
             return await response.json();

@@ -25,8 +25,13 @@ MAX_UPLOAD_SIZE_MB = 50
 LLM_MAX_RETRIES = 3
 LLM_TIMEOUT_SECONDS = 60
 
-# Database Configuration (for future use)
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./interviews.db")
+# Database Configuration
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_SZoulv6e7kfQ@ep-still-moon-ahliiwwj-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require")
+
+# JWT Configuration
+SECRET_KEY = os.getenv("SECRET_KEY", "supersecretjwtkey_1234567890")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
 
 # Logging Configuration
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

@@ -15,7 +15,8 @@ langchain-google-genai
 pydantic>=1.7.0
 python-multipart
 python-dotenv
-langchain_groqSQLAlchemy>=2.0.0
+langchain_groq
+SQLAlchemy>=2.0.0
 psycopg2-binary>=2.9.9
 passlib[bcrypt]>=1.7.4
 python-jose[cryptography]>=3.3.0

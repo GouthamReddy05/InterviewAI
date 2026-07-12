@@ -18,12 +18,18 @@ function renderLanding() {
                         </div>
                         <span class="text-white font-semibold text-lg">InterviewAI</span>
                     </div>
-                    <div class="hidden sm:flex items-center gap-8">
-                        <a href="#features"    class="text-surface-400 hover:text-white transition-colors text-sm">Features</a>
+                    <div class="flex items-center gap-4 sm:gap-8" id="nav-links">
+                        <a href="#features" class="text-surface-400 hover:text-white transition-colors text-sm">Features</a>
                         <a href="#how-it-works" class="text-surface-400 hover:text-white transition-colors text-sm">How it Works</a>
-                        <a href="#agents"      class="text-surface-400 hover:text-white transition-colors text-sm">Agents</a>
+                        ${localStorage.getItem('interviewai_token') ? `
+                            <button onclick="state.step=8;render()" class="text-surface-400 hover:text-white transition-colors text-sm">Admin Panel</button>
+                            <button onclick="localStorage.removeItem('interviewai_token'); window.location.reload();" class="text-surface-400 hover:text-white transition-colors text-sm">Logout</button>
+                        ` : `
+                            <button onclick="state.step=6;render()" class="text-surface-400 hover:text-white transition-colors text-sm">Login</button>
+                            <button onclick="state.step=7;render()" class="text-surface-400 hover:text-white transition-colors text-sm">Sign Up</button>
+                        `}
                     </div>
-                    <button onclick="state.step=1;render()"
+                    <button onclick="if(localStorage.getItem('interviewai_token')){state.step=1;render()}else{state.step=6;render()}"
                         class="bg-accent-600 hover:bg-accent-700 text-white px-5 py-2 rounded-lg text-sm font-medium transition-all hover:shadow-lg hover:shadow-accent-600/20">
                         Start Interview
                     </button>
@@ -46,7 +52,7 @@ function renderLanding() {
                         Real-time technical evaluation, communication analysis, body language tracking, and personalized feedback — all in one session.
                     </p>
                     <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                        <button onclick="state.step=1;render()"
+                        <button onclick="if(localStorage.getItem('interviewai_token')){state.step=1;render()}else{state.step=6;render()}"
                             class="bg-accent-600 hover:bg-accent-700 text-white px-8 py-3.5 rounded-xl text-base font-medium transition-all hover:shadow-xl hover:shadow-accent-600/25 hover:-translate-y-0.5">
                             Start Mock Interview
                         </button>
