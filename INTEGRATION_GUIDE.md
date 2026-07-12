@@ -35,7 +35,7 @@ InterviewAI is a comprehensive AI-powered mock interview simulator that integrat
 │   │   ├── results.js           # Results & report
 │   └── css/
 │       └── styles.css           # Tailwind styles
-└── dummy/                         # AI processing modules
+└── ml/                            # AI processing modules
     ├── extract_text.py          # PDF/DOCX text extraction
     ├── face_detection.py        # MediaPipe face detection
     ├── object_detection.py      # YOLOv8 object detection
@@ -48,7 +48,7 @@ InterviewAI is a comprehensive AI-powered mock interview simulator that integrat
 
 ### 1. **Backend AI Services** (`services.py`)
 
-All dummy folder utilities are now wrapped into service classes:
+All ml folder utilities are now wrapped into service classes:
 
 #### FaceDetectionService
 - Detects face presence and count

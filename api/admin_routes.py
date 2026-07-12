@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from database import get_db
-import db_models
-import auth
+from core.database import get_db
+from models.schemas import db_models
+from core import auth
 from typing import List
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])

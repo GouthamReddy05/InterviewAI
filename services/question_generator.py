@@ -16,10 +16,10 @@ from requests import session
 # Load environment variables from .env file
 load_dotenv()
 
-# Add dummy folder to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dummy'))
+# Add ml folder to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ml'))
 
-from models import (
+from models.schemas import (
     InterviewQuestion,
     InterviewSession,
     CandidateAnswer,
@@ -27,7 +27,7 @@ from models import (
     AnswerEvaluation,
     RatingEnum,
 )
-from prompts import (
+from services.prompts import (
     QUESTION_GENERATION_PROMPT,
     FOLLOWUP_QUESTION_PROMPT,
     ANSWER_EVALUATION_PROMPT

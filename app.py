@@ -11,24 +11,24 @@ import numpy as np
 
 dotenv.load_dotenv()
 
-# Add dummy folder to path for imports
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'dummy'))
+# Add ml folder to path for imports
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ml'))
 
-import database
-import db_models
-import auth
-import auth_routes
-import admin_routes
+from core import database
+from models.schemas import db_models
+from core import auth
+from api import auth_routes
+from api import admin_routes
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from pydantic import BaseModel
 
-from question_generator import InterviewSessionManager
-from models import (
+from services.question_generator import InterviewSessionManager
+from models.schemas import (
     AnswerSubmissionRequest,
 )
-# Import directly from dummy folder
-from dummy.extract_text import extract_text_from_file
+# Import directly from ml folder
+from ml.extract_text import extract_text_from_file
 
 # Import ML libraries for detection
 import cv2
@@ -65,7 +65,7 @@ face_mesh = mp_face_mesh.FaceMesh(
 )
 
 # Load YOLOv8 model
-model_path = "dummy/yolov8n.pt" if os.path.exists("dummy/yolov8n.pt") else "yolov8n.pt"
+model_path = "ml/yolov8n.pt" if os.path.exists("ml/yolov8n.pt") else "yolov8n.pt"
 
 # Patch torch.load to fix PyTorch 2.6 weights_only=True compatibility issue with ultralytics
 import torch
@@ -147,7 +147,7 @@ async def upload_resume(
     - first_question: First question to start the interview
     """
     try:
-        # Extract text directly from dummy folder if not provided
+        # Extract text directly from ml folder if not provided
         if resume_text:
             text_to_use = resume_text
         else:
@@ -487,7 +487,7 @@ async def end_session(
 
 
 # =====================================================
-# AI MONITORING & ANALYSIS ROUTES (Dummy Integration)
+# AI MONITORING & ANALYSIS ROUTES (ML Integration)
 # =====================================================
 
 @app.post("/api/analyze-frame")
