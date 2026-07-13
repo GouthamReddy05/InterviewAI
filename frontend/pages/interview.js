@@ -742,7 +742,7 @@ function startFrameAnalysis() {
         } catch (error) {
             console.debug('Optimized frame analysis failed:', error);
         }
-    }, 600); // Super fast 600ms interval for near real-time detection without overloading
+    }, 3000); // Super fast 3000ms interval for near real-time detection without overloading
 }
 
 function showTopBanner(text) {

@@ -3,7 +3,7 @@ Data Models for Interview System
 """
 
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Any
 from datetime import datetime
 from enum import Enum
 
@@ -90,14 +90,14 @@ class InterviewSession(BaseModel):
     answers: List[CandidateAnswer] = []
     follow_ups: List[FollowUpQuestion] = []
 
-    # Conversation history for context-aware follow-ups
-    # Each entry: {"type": "question|answer", "question_id": int, "text": str, "depth": int}
-    conversation_history: List[dict] = []
+    # LangChain memory for context-aware follow-ups
+    memory: Any = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     status: str = "in_progress"  # in_progress, completed
 
     class Config:
+        arbitrary_types_allowed = True
         json_schema_extra = {
             "example": {
                 "session_id": "session_123",

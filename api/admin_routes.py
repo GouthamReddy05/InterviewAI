@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from core.database import get_db
-from models.schemas import db_models
+from models import db_models
 from core import auth
 from typing import List
 

@@ -11,12 +11,12 @@ STRICT RULES:
 
 1. IGNORE the Education section completely.
 
-2. Generate A MASSIVE AMOUNT OF QUESTIONS. YOU MUST GENERATE AT LEAST 15 TO 20 QUESTIONS MINIMUM.
-   - Technical skills (4 questions per skill)
-   - Projects (4 questions per project)
-   - Work/Internship/Freelance/Research/Leadership Experience (4 questions per role)
+2. Generate A MASSIVE AMOUNT OF QUESTIONS. YOU MUST GENERATE AT LEAST 25 TO 30 QUESTIONS MINIMUM.
+   - Technical skills (5 questions per skill)
+   - Projects (5 questions per project)
+   - Work/Internship/Freelance/Research/Leadership Experience (5 questions per role)
    - Achievements/Awards (4 questions per achievement)
-   DO NOT STOP GENERATING UNTIL YOU HAVE AT LEAST 15 QUESTIONS TOTAL!
+   DO NOT STOP GENERATING UNTIL YOU HAVE AT LEAST 25 QUESTIONS TOTAL!
 
 3. Question Quality Guidelines:
    - Ask about PRACTICAL usage, not textbook definitions.

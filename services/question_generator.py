@@ -11,6 +11,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from langchain.chat_models import init_chat_model
 import sys
 from langchain_groq import ChatGroq
+from langchain_classic.memory import ConversationBufferMemory
 from requests import session
 
 # Load environment variables from .env file
@@ -156,21 +157,14 @@ class InterviewQuestionGenerator:
         candidate_answer: str,
         difficulty_level: str,
         context: str,
-        conversation_history: List[dict] = None,
+        conversation_history_text: str = "",
         current_depth: int = 1,
         max_depth: int = 3
     ) -> str:
         """Generate follow-up question based on candidate answer and conversation history"""
         
         # Format conversation history for prompt
-        history_text = ""
-        if conversation_history and len(conversation_history) > 0:
-            history_text = "\n".join([
-                f"[{h.get('type', 'unknown').upper()}] {h.get('text', '')}"
-                for h in conversation_history
-            ])
-        else:
-            history_text = "[No prior follow-ups yet]"
+        history_text = conversation_history_text if conversation_history_text else "[No prior follow-ups yet]"
         
         prompt = FOLLOWUP_QUESTION_PROMPT.format(
             primary_question=primary_question,
@@ -275,7 +269,8 @@ class InterviewSessionManager:
             resume_name=resume_name,
             job_role=job_role,
             extracted_profile=profile,
-            questions=questions
+            questions=questions,
+            memory=ConversationBufferMemory(return_messages=False)
         )
         
         # Store session
@@ -319,12 +314,18 @@ class InterviewSessionManager:
         if not current_question:
             raise ValueError(f"No current question in session {session_id}")
         # Add the primary question only once for this question
-        if not session.conversation_history:
-            session.conversation_history.append({
-                "type": "primary_question",
-                "question_id": current_question.id,
-                "text": current_question.primary_question
-            })
+        # Save context to memory
+        if not session.is_followup_mode:
+            session.memory.save_context(
+                {"input": f"[PRIMARY_QUESTION] {current_question.primary_question}"},
+                {"output": f"[ANSWER] {answer}"}
+            )
+        else:
+            last_followup = session.follow_ups[-1].question if session.follow_ups else ""
+            session.memory.save_context(
+                {"input": f"[FOLLOWUP_QUESTION] {last_followup}"},
+                {"output": f"[FOLLOWUP_ANSWER] {answer}"}
+            )
 
         # Store answer
         candidate_answer = CandidateAnswer(
@@ -334,14 +335,6 @@ class InterviewSessionManager:
             followup_depth=session.current_followup_depth
         )
         session.answers.append(candidate_answer)
-        
-        # Add to conversation history
-        session.conversation_history.append({
-            "type": "answer" if not session.is_followup_mode else "followup_answer",
-            "question_id": current_question.id,
-            "depth": session.current_followup_depth,
-            "text": answer
-        })
         
         # Evaluate answer
         evaluation = self.generator.evaluate_answer(
@@ -382,20 +375,12 @@ class InterviewSessionManager:
                 candidate_answer=answer,
                 difficulty_level=current_question.difficulty_level,
                 context=current_question.context,
-                conversation_history=session.conversation_history,
+                conversation_history_text=session.memory.buffer,
                 current_depth=session.current_followup_depth,
                 max_depth=session.max_followup_depth
             )
             
             follow_up_question = follow_up_q
-            
-            # Add follow-up to conversation history
-            session.conversation_history.append({
-                "type": "followup_question",
-                "question_id": current_question.id,
-                "depth": session.current_followup_depth,
-                "text": follow_up_q
-            })
             
             # Store follow-up record
             follow_up = FollowUpQuestion(
@@ -411,7 +396,7 @@ class InterviewSessionManager:
             action = "next_question"
             session.is_followup_mode = False
             session.current_followup_depth = 0
-            session.conversation_history = []
+            session.memory.clear()
             
             # Store the main follow-up for record (this was the final follow-up we asked)
             if session.follow_ups and session.follow_ups[-1].original_question_id == current_question.id:
@@ -465,7 +450,7 @@ class InterviewSessionManager:
             # Reset follow-up state for new question
             session.is_followup_mode = False
             session.current_followup_depth = 0
-            session.conversation_history = []
+            session.memory.clear()
             return True
         else:
             # Interview complete

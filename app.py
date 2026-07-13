@@ -15,7 +15,7 @@ dotenv.load_dotenv()
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ml'))
 
 from core import database
-from models.schemas import db_models
+from models import db_models
 from core import auth
 from api import auth_routes
 from api import admin_routes
