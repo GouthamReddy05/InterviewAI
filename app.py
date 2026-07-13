@@ -3,6 +3,8 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['GLOG_minloglevel'] = '2'
 import sys
 from fastapi.staticfiles import StaticFiles
 import dotenv   
@@ -334,6 +336,19 @@ async def next_question(session_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class EndSessionRequest(BaseModel):
+    score: float
+
+@app.post("/api/session/{session_id}/end")
+async def end_session(session_id: str, request: EndSessionRequest):
+    try:
+        session = session_manager.get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+        session.status = "completed"
+        return JSONResponse({"status": "success", "message": "Session ended"})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/session/{session_id}/progress")
 async def get_progress(session_id: str):
@@ -452,12 +467,12 @@ async def get_comprehensive_report(
         db_interview = db.query(db_models.InterviewSessionModel).filter(db_models.InterviewSessionModel.session_id == session_id).first()
         if db_interview:
             db_interview.status = "completed"
-            db_interview.score = scores.get("overall_score")
+            db_interview.score = scores.get("overall_score", 0.0)
             db.commit()
         
         return JSONResponse({
             "status": "success",
-            "report": comprehensive_report
+            "comprehensive_report": comprehensive_report
         })
     
     except Exception as e:
@@ -764,14 +779,15 @@ async def transcribe_audio(audio: UploadFile = File(...)):
     Returns transcription with confidence score
     """
     try:
+        import io
         audio_bytes = await audio.read()
         
-        # Convert bytes to numpy array
-        audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
+        # Convert bytes to a stream instead of blindly loading as int16
+        audio_stream = io.BytesIO(audio_bytes)
         
         # Transcribe using Whisper
         segments, info = whisper_model.transcribe(
-            audio_np,
+            audio_stream,
             language="en",
             beam_size=5
         )

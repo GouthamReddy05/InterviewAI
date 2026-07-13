@@ -805,17 +805,14 @@ function _setBarWidth(id, percent) {
 /* -------- Interview Flow -------- */
 
 function startInterviewFlow() {
-    const name = state.candidateName || 'Candidate';
-    addMessage('ai', `Good morning ${name}. Thank you for joining today's AI-conducted interview for the ${state.jobRole} position. We will cover a mix of difficulty-appropriate technical, project, and skill questions. Let's start.`);
-    
     state.agentStatus.technicalEvaluator = 'waiting';
     state.agentStatus.communicationEvaluator = 'monitoring';
     state.agentStatus.faceMonitor = 'tracking';
 
     setTimeout(() => {
-        addMessage('ai', state.questions[0].text);
+        addMessage('ai', state.questions[0].text || state.questions[0].primary_question);
         render();
-    }, 2200);
+    }, 1000);
 }
 
 async function speakText(text) {

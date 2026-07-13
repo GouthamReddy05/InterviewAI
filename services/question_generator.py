@@ -402,10 +402,17 @@ class InterviewSessionManager:
             if session.follow_ups and session.follow_ups[-1].original_question_id == current_question.id:
                 pass  # Already stored
         
+        try:
+            eval_dict = evaluation.model_dump(mode="json")
+        except AttributeError:
+            eval_dict = evaluation.dict()
+            if "rating" in eval_dict and hasattr(eval_dict["rating"], "value"):
+                eval_dict["rating"] = eval_dict["rating"].value
+            
         # Prepare response
         result = {
             "action": action,
-            "evaluation": evaluation.dict(),
+            "evaluation": eval_dict,
             "follow_up_question": follow_up_question,
             "followup_depth": session.current_followup_depth,
             "next_question": None,

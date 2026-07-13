@@ -134,10 +134,10 @@ Provide:
 
 Output valid JSON only:
 
-{
+{{
   "rating": "string",
   "strengths": ["point1", "point2"],
   "improvements": ["point1", "point2"],
   "follow_up_direction": "suggestion for next question"
-}
+}}
 """

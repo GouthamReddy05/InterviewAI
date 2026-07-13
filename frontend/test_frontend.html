@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head></head>
+<body>
+<div id="app"></div>
+<video id="webcam"></video>
+<canvas id="cvCanvas"></canvas>
+<script>
+    // mock DOM
+    document.getElementById = function(id) {
+        if(id === 'app') return document.querySelector('#app');
+        if(id === 'webcam') return document.querySelector('#webcam');
+        if(id === 'cvCanvas') return document.querySelector('#cvCanvas');
+        return {
+            getContext: () => ({ clearRect: ()=>{}, fillRect: ()=>{}, fillText: ()=>{} }),
+            getBoundingClientRect: () => ({width: 100, height: 100}),
+            width: 100, height: 100
+        };
+    };
+</script>
+<script src="js/state.js"></script>
+<script src="js/data.js"></script>
+<script src="js/router.js"></script>
+<script src="js/api-service.js"></script>
+<script src="pages/landing.js"></script>
+<script src="pages/upload.js"></script>
+<script src="pages/analysis.js"></script>
+<script src="pages/setup.js"></script>
+<script src="pages/interview.js"></script>
+<script src="pages/results.js"></script>
+
+<script>
+    state.step = 4;
+    state.interviewActive = true;
+    state.stream = { getTracks: () => [] };
+    state.sessionId = "123";
+    state.reportData = null;
+    
+    // override fetch
+    window.fetch = async () => {
+        return {
+            json: async () => ({ status: 'success' })
+        };
+    };
+
+    try {
+        endInterview();
+        console.log("endInterview completed successfully, step is now:", state.step);
+        console.log("app innerHTML:", app.innerHTML);
+    } catch(e) {
+        console.error("ERROR in endInterview:", e);
+    }
+</script>
+</body>
+</html>
