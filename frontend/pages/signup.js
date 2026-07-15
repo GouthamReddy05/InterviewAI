@@ -4,106 +4,56 @@
 
 function renderSignup() {
     app.innerHTML = `
-    <div class="ia-page font-sans selection:bg-blue-200/60 flex min-h-screen">
-        <div class="hidden lg:flex w-[46%] bg-slate-950 text-white p-10 flex-col justify-between">
-            <button onclick="state.step=0;render()" class="flex items-center gap-3 text-left">
-                <span class="w-10 h-10 rounded-lg bg-white text-slate-950 flex items-center justify-center">
-                    <i data-lucide="brain-circuit" class="w-5 h-5"></i>
-                </span>
-                <span class="font-semibold">InterviewAI</span>
-            </button>
-            <div>
-                <div class="ia-chip bg-white/10 border-white/10 text-slate-200 mb-6">
-                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-blue-300"></i>
-                    Build your practice record
-                </div>
-                <h1 class="text-4xl font-bold tracking-tight leading-tight max-w-md">Create a guided interview practice loop.</h1>
-                <div class="mt-10 space-y-3 max-w-md">
-                    ${[
-                        ['Resume extraction', 'file-search'],
-                        ['Role-based questions', 'route'],
-                        ['Detailed reports', 'clipboard-check']
-                    ].map(item => `
-                        <div class="rounded-lg bg-white/5 border border-white/10 p-4 flex items-center gap-3">
-                            <i data-lucide="${item[1]}" class="w-5 h-5 text-emerald-300"></i>
-                            <span class="text-sm font-semibold">${item[0]}</span>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-            <p class="text-sm text-slate-400">One account for setup, live sessions, reports, and admin views.</p>
-        </div>
+    <div class="min-h-screen flex items-center justify-center relative overflow-hidden" style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);">
+        <div class="absolute w-[400px] h-[400px] bg-purple-600 rounded-full blur-[80px] opacity-30 -top-10 -right-10 animate-pulse"></div>
+        <div class="absolute w-[500px] h-[500px] bg-accent-600 rounded-full blur-[80px] opacity-20 -bottom-10 -left-10 animate-pulse" style="animation-delay: -3s;"></div>
 
-        <div class="flex-1 flex items-center justify-center px-4 py-10">
-            <div class="w-full max-w-md">
-                <button onclick="state.step=0;render()" class="lg:hidden mb-8 text-slate-600 hover:text-slate-950 flex items-center gap-2 text-sm font-semibold">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back
+        <div class="relative z-10 w-full max-w-md p-8 bg-surface-900/60 backdrop-blur-xl rounded-2xl border border-surface-700/50 shadow-2xl">
+            <div class="absolute top-4 left-4">
+                <button onclick="state.step=0;render()" class="text-surface-400 hover:text-white flex items-center gap-2 transition-colors text-sm">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to Home
                 </button>
-                <div class="ia-card p-6 sm:p-8">
-                    <div class="mb-8">
-                        <div class="w-11 h-11 rounded-lg bg-slate-950 text-white flex items-center justify-center mb-5">
-                            <i data-lucide="user-plus" class="w-5 h-5"></i>
-                        </div>
-                        <h1 class="text-2xl font-bold tracking-tight text-slate-950">Create account</h1>
-                        <p class="text-slate-600 text-sm mt-2">Start a practice workspace for interview sessions.</p>
-                    </div>
-
-                    <div id="errorBox" class="hidden border border-rose-200 bg-rose-50 text-rose-700 p-3 rounded-lg text-sm mb-5"></div>
-
-                    <form id="signupForm" class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Username</label>
-                            <div class="relative">
-                                <i data-lucide="user" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                                <input type="text" id="username" required class="ia-input w-full pl-10 pr-3 py-2.5 text-sm" placeholder="Choose a username">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Email</label>
-                            <div class="relative">
-                                <i data-lucide="mail" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                                <input type="email" id="email" required class="ia-input w-full pl-10 pr-3 py-2.5 text-sm" placeholder="you@example.com">
-                            </div>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Password</label>
-                            <div class="relative">
-                                <i data-lucide="key-round" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
-                                <input type="password" id="password" required class="ia-input w-full pl-10 pr-3 py-2.5 text-sm" placeholder="Create a password">
-                            </div>
-                        </div>
-                        <button type="submit" class="ia-button-primary w-full py-3 text-sm font-semibold flex items-center justify-center gap-2">
-                            Sign up <i data-lucide="arrow-right" class="w-4 h-4"></i>
-                        </button>
-                    </form>
-
-                    <div class="mt-6 text-center text-sm text-slate-600">
-                        Already have an account?
-                        <button onclick="state.step=6;render()" class="text-slate-950 font-semibold hover:underline">Log in</button>
-                    </div>
-                </div>
             </div>
+            <div class="text-center mb-8 mt-4">
+                <h1 class="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-accent-400 mb-2">Create Account</h1>
+                <p class="text-surface-400 text-sm">Join InterviewAI to start practicing</p>
+            </div>
+            <div id="errorBox" class="hidden bg-danger-500/10 border border-danger-500/20 text-danger-400 p-3 rounded-lg text-sm mb-6 text-center"></div>
+            <form id="signupForm" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-surface-200 mb-1.5">Username</label>
+                    <input type="text" id="username" required class="w-full bg-surface-800/80 border border-surface-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-surface-200 mb-1.5">Email</label>
+                    <input type="email" id="email" required class="w-full bg-surface-800/80 border border-surface-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-surface-200 mb-1.5">Password</label>
+                    <input type="password" id="password" required class="w-full bg-surface-800/80 border border-surface-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all">
+                </div>
+                <button type="submit" class="w-full bg-purple-600 hover:bg-purple-500 text-white font-medium py-3 rounded-xl shadow-[0_0_15px_rgba(147,51,234,0.3)] transition-all hover:-translate-y-0.5 mt-4">Sign Up</button>
+            </form>
+            <div class="mt-8 text-center text-sm text-surface-400">Already have an account? <button onclick="state.step=6;render()" class="text-purple-400 hover:text-purple-300 font-medium transition-colors">Sign in</button></div>
         </div>
-    </div>
-    `;
+    </div>`;
 
     setTimeout(() => {
         if (window.lucide) lucide.createIcons();
         document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
-            const username = document.getElementById('username').value;
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
             const errorBox = document.getElementById('errorBox');
-            
             try {
                 const response = await fetch('/api/auth/signup', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, email, password })
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        email: document.getElementById('email').value,
+                        password: document.getElementById('password').value
+                    })
                 });
                 const data = await response.json();
-                
                 if (response.ok) {
                     localStorage.setItem('interviewai_token', data.access_token);
                     state.step = 0;

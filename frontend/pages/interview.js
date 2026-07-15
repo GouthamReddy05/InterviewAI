@@ -436,7 +436,7 @@ function renderActiveInterview() {
         : `Q${state.currentQuestion + 1} of ${totalQ}`;
 
     app.innerHTML = `
-    <div class="interview-shell min-h-screen text-slate-100 font-sans selection:bg-blue-300/30">
+    <div class="min-h-screen bg-surface-950 text-surface-200 font-sans selection:bg-blue-300/30">
         <!-- Top Bar -->
         <div class="fixed top-0 w-full z-40 bg-slate-950/88 backdrop-blur-md border-b border-white/10">
             <div class="max-w-7xl mx-auto px-4 py-3">
@@ -444,33 +444,26 @@ function renderActiveInterview() {
                     <div class="flex items-center gap-3">
                         <div class="flex items-center gap-2">
                             <div class="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></div>
-                            <span class="text-white text-xs font-semibold uppercase tracking-wider">Live Session</span>
+                            <span class="text-white text-xs font-semibold uppercase tracking-wider">Live Simulator Feed</span>
                         </div>
                         <span class="text-white/20">|</span>
-                        <span class="text-slate-300 text-xs hidden sm:inline">${name} &middot; ${state.jobRole}</span>
+                        <span class="text-surface-400 text-xs hidden sm:inline">${name} — ${state.jobRole} (${state.difficulty.toUpperCase()})</span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span class="text-slate-200 text-xs font-mono bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">${progressText}</span>
-                        <button onclick="endInterview()" class="text-rose-300 hover:text-white transition-colors text-xs font-semibold border border-rose-400/30 hover:bg-rose-500 px-3 py-1.5 rounded-md">
+                        <button onclick="endInterview()" class="text-danger-400 hover:text-danger-500 text-xs font-semibold transition-colors border border-danger-500/20 hover:border-danger-500/40 px-3 py-1 rounded-lg">
                             End Session
                         </button>
                     </div>
                 </div>
-                <div class="w-full bg-white/10 rounded-full h-1 mt-2.5 overflow-hidden">
-                    <div class="bg-gradient-to-r from-blue-400 to-emerald-400 h-1 rounded-full transition-all duration-500"
+                <div class="w-full bg-surface-900 rounded-full h-1.5 mt-2 overflow-hidden">
+                    <div class="bg-accent-600 h-1.5 rounded-full transition-all duration-500"
                          style="width:${((state.currentQuestion) / totalQ) * 100}%"></div>
                 </div>
             </div>
         </div>
 
         <div class="max-w-7xl mx-auto px-4 pt-20 pb-8">
-            <div class="flex items-center justify-between pt-4 pb-2">
-                <div>
-                    <p class="text-[10px] uppercase tracking-[.24em] text-blue-300 font-bold">Interview workspace</p>
-                    <h1 class="text-xl sm:text-2xl font-semibold text-white mt-1">Stay present. Think out loud.</h1>
-                </div>
-                <div class="hidden sm:flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest"><span class="w-2 h-2 bg-emerald-400 rounded-full"></span>Secure session</div>
-            </div>
             <div class="grid lg:grid-cols-3 gap-6">
 
                 <!-- Left Column (Video HUD & Chat) -->
@@ -1073,7 +1066,7 @@ function endInterview() {
 
 function _cameraPanel() {
     return `
-    <div class="video-container interview-panel aspect-video relative overflow-hidden">
+    <div class="video-container bg-surface-900 aspect-video relative rounded-xl border border-surface-800 shadow-xl overflow-hidden">
         ${state.stream ? `
             <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
         ` : `
@@ -1095,9 +1088,9 @@ function _cameraPanel() {
         </div>
         
         <div class="absolute top-3 right-3 z-20">
-            <div class="bg-slate-950/80 backdrop-blur-md rounded-md px-3 py-1.5 border border-white/10 text-[10px] font-mono">
-                <span class="text-slate-400 uppercase tracking-widest">Session:</span>
-                <span class="text-white ml-2 font-medium">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
+            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-surface-800 text-[10px] font-mono">
+                <span class="text-surface-500">Session:</span>
+                <span class="text-accent-400 ml-2 font-semibold">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
             </div>
         </div>
         
@@ -1129,20 +1122,20 @@ function _chatPanel(question) {
         : `<i data-lucide="mic" class="w-4 h-4"></i>`;
 
     return `
-    <div class="interview-panel-light text-slate-950 overflow-hidden">
-        <div class="bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between">
+    <div class="glass rounded-xl overflow-hidden border border-surface-800 shadow-xl">
+        <div class="bg-surface-900 border-b border-surface-800 px-4 py-2.5 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <span class="w-2 h-2 bg-blue-600 rounded-full"></span>
-                <span class="text-slate-950 text-xs font-bold uppercase tracking-wider">Dialogue</span>
+                <span class="w-2 h-2 bg-success-500 rounded-full"></span>
+                <span class="text-white text-xs font-semibold uppercase tracking-wider">AI Dialogue Interface</span>
             </div>
-            <span class="text-slate-500 text-[10px] font-mono tracking-widest uppercase">Active</span>
+            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Llama 3 (Groq)</span>
         </div>
 
         <div id="chatContainer" class="p-5 space-y-4 max-h-[300px] overflow-y-auto" style="min-height:260px">
             ${state.chatMessages.map(msg => `
             <div class="flex ${msg.sender === 'ai' ? 'justify-start' : 'justify-end'} fade-in">
-                <div class="max-w-[85%] rounded-lg px-4 py-2.5 ${msg.sender === 'ai' ? 'bg-slate-100 border border-slate-200 text-slate-800' : 'bg-slate-950 text-white'}">
-                    <div class="text-[9px] ${msg.sender === 'ai' ? 'text-slate-500' : 'text-slate-300'} uppercase tracking-widest mb-1 font-mono">
+                <div class="chat-bubble ${msg.sender === 'ai' ? 'ai text-surface-200 bg-surface-900 border border-surface-800' : 'user text-white bg-accent-600/15 border border-accent-600/25'}">
+                    <div class="text-[9px] text-surface-500 uppercase tracking-widest mb-1 font-mono">
                         ${msg.sender === 'ai' ? 'INTERVIEWER' : 'YOU'}
                     </div>
                     <div class="text-[13px] leading-relaxed">${msg.text}</div>
@@ -1150,25 +1143,25 @@ function _chatPanel(question) {
             </div>`).join('')}
             
             <div id="typingIndicator" class="flex justify-start hidden">
-                <div class="bg-[#111111] border border-[#222222] rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center">
-                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 0ms"></div>
-                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 150ms"></div>
-                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 300ms"></div>
+                <div class="chat-bubble ai flex gap-1.5 py-3">
+                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
+                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
                 </div>
             </div>
         </div>
 
-        <div class="border-t border-slate-200 p-4 bg-slate-50">
+        <div class="border-t border-surface-800 p-3 bg-surface-900/50">
             <div class="flex items-center gap-3">
                 <button onclick="startRecording()" id="micBtn"
                     class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${micBtnClass}">
                     ${micIndicator}
                 </button>
-                <input type="text" id="textInput" placeholder="Type your response..."
-                    class="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-950 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-[13px] transition-colors"
+                <input type="text" id="textInput" placeholder="Click microphone to talk, or type your response here..."
+                    class="flex-1 bg-surface-950 border border-surface-800 rounded-xl px-4 py-2.5 text-white placeholder-surface-500 focus:outline-none focus:border-accent-600/50 text-[13px] transition-all"
                     onkeydown="if(event.key==='Enter')submitAnswer()">
                 <button onclick="submitAnswer()"
-                    class="w-10 h-10 rounded-lg bg-slate-950 hover:bg-slate-800 text-white flex items-center justify-center transition-colors flex-shrink-0">
+                    class="w-10 h-10 rounded-xl bg-accent-600 hover:bg-accent-700 text-white flex items-center justify-center transition-all flex-shrink-0">
                     <i data-lucide="send" class="w-4 h-4"></i>
                 </button>
             </div>
@@ -1181,12 +1174,11 @@ function _questionInfo(question) {
     const header = state.isFollowUpActive ? 'FOLLOW-UP QUESTION' : 'CURRENT QUESTION';
     const desc = question ? question.text : 'Preparing next question...';
     return `
-    <div class="interview-panel-light p-5 text-slate-950">
+    <div class="glass rounded-xl p-4 border border-surface-800">
         <div class="flex items-center gap-2 mb-2">
-            <i data-lucide="help-circle" class="w-4 h-4 text-blue-600"></i>
-            <div class="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">${header}</div>
+            <div class="text-[10px] font-mono uppercase tracking-wider text-accent-400 font-bold">${header}</div>
         </div>
-        <div class="text-slate-950 text-[13px] leading-relaxed font-semibold">${desc}</div>
+        <div class="text-white text-xs leading-relaxed font-medium">${desc}</div>
     </div>`;
 }
 
@@ -1202,19 +1194,18 @@ function _liveMetrics() {
         { label: 'Confidence',      value: m.confidenceScore,    id: 'metric-conf', barId: 'bar-conf' }
     ];
     return `
-    <div class="interview-panel-light p-5 text-slate-950">
-        <div class="text-slate-950 text-xs font-bold mb-4 flex items-center gap-2">
-            <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-600"></i>
-            Live Performance Metrics
+    <div class="glass rounded-xl p-4 border border-surface-800">
+        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">
+            Live Session Metrics
         </div>
         <div class="space-y-4">
             ${bars.map(b => `
             <div>
                 <div class="flex justify-between text-[11px] mb-1.5">
-                    <span class="text-slate-500 font-bold tracking-wide uppercase font-mono">${b.label}</span>
-                    <span class="text-slate-950 font-bold font-mono" id="${b.id}">${b.value}/10</span>
+                    <span class="text-surface-400 font-medium">${b.label}</span>
+                    <span class="text-white font-semibold font-mono" id="${b.id}">${b.value}/10</span>
                 </div>
-                <div class="bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-surface-900 rounded-full h-1.5 border border-surface-800 overflow-hidden">
                     <div class="bg-emerald-500 h-1.5 rounded-full score-fill transition-all duration-300" id="${b.barId}" style="width:${b.value * 10}%"></div>
                 </div>
             </div>`).join('')}
@@ -1272,10 +1263,10 @@ function _ragEvaluatorPanel() {
     }
 
     return `
-    <div class="interview-panel-light p-5 text-slate-950">
-        <div class="text-slate-950 text-xs font-bold mb-3 flex items-center justify-between">
-            <span class="flex items-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-blue-600"></i> Answer Evaluation</span>
-            <span class="text-[9px] bg-blue-50 text-blue-700 px-2 py-1 rounded-md border border-blue-100 font-mono uppercase tracking-widest">Real-time</span>
+    <div class="glass rounded-xl p-4 border border-surface-800 bg-surface-900/10">
+        <div class="text-white text-xs font-semibold mb-2 uppercase tracking-wider font-mono flex items-center justify-between">
+            <span>RAG Evaluator Agent Logs</span>
+            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono animate-pulse">Llama 3 (Groq)</span>
         </div>
         ${contentHtml}
     </div>`;
@@ -1283,13 +1274,12 @@ function _ragEvaluatorPanel() {
 
 function _warningsPanel() {
     return `
-    <div class="interview-panel-light p-5 text-slate-950">
-        <div class="text-slate-950 text-xs font-bold mb-3 flex items-center gap-2">
-            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i> Integrity Alerts
+    <div class="glass rounded-xl p-4 border border-surface-800">
+        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Cheating Alerts</div>
         </div>
         <div id="warningsList" class="space-y-2 max-h-32 overflow-y-auto">
             ${state.warnings.length === 0
-                ? `<div class="text-slate-500 text-xs font-semibold">No anomalies flagged</div>`
+                ? `<div class="text-surface-600 text-xs italic">No active anomalies flagged</div>`
                 : state.warnings.map(w => `
                     <div class="flex items-start gap-2 text-[11px] leading-tight text-[#ef4444] bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-md px-3 py-2 fade-in">
                         <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0 mt-px"></i>
@@ -1308,9 +1298,8 @@ function _agentStatusPanel() {
         { label: 'Face Monitor', key: 'faceMonitor' }
     ];
     return `
-    <div class="interview-panel-light p-5 text-slate-950">
-        <div class="text-slate-950 text-xs font-bold mb-4 flex items-center gap-2">
-            <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i> System Tasks
+    <div class="glass rounded-xl p-4 border border-surface-800">
+        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Running Agent Tasks</div>
         </div>
         <div class="space-y-3">
             ${agents.map(a => {

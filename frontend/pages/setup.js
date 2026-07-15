@@ -4,162 +4,89 @@
 
 function renderInterviewSetup() {
     const name = state.candidateName || 'Candidate';
+    const choices = [
+        { id: 'easy', label: 'Warm-up', name: 'Easy', icon: 'sprout', color: 'emerald', text: 'Build confidence with foundational questions and gentle follow-ups.', meta: 'Best for getting started' },
+        { id: 'medium', label: 'Balanced', name: 'Medium', icon: 'target', color: 'indigo', text: 'A realistic mix of technical depth, breadth, and adaptive follow-ups.', meta: 'Recommended for most sessions' },
+        { id: 'hard', label: 'Stretch', name: 'Hard', icon: 'flame', color: 'rose', text: 'Go deeper with ambiguous scenarios and challenging reasoning prompts.', meta: 'Best for final preparation' }
+    ];
 
     app.innerHTML = `
-    <div class="ia-page font-sans selection:bg-blue-500/30 pb-16 bg-slate-950 text-slate-200 min-h-screen">
-        <!-- Progress Bar -->
-        <div class="fixed top-0 w-full z-40 bg-slate-950/80 backdrop-blur-md border-b border-white/10">
-            <div class="max-w-5xl mx-auto px-4 py-4">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-white text-sm font-semibold tracking-tight">Interview Parameters</span>
-                    <span class="text-slate-400 text-xs font-mono">Step 2 of 5</span>
+    <div class="min-h-screen bg-surface-950 text-surface-200 font-sans selection:bg-indigo-500/30">
+        <header class="sticky top-0 z-40 border-b border-white/10 bg-surface-950/85 backdrop-blur-xl">
+            <div class="max-w-6xl mx-auto px-5 sm:px-8 h-16 flex items-center justify-between">
+                <button onclick="state.step=1;render()" class="flex items-center gap-2 text-surface-400 hover:text-white text-sm transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Back to profile
+                </button>
+                <div class="hidden sm:flex items-center gap-3 text-[10px] uppercase tracking-[.2em] font-semibold text-surface-500">
+                    <span class="text-indigo-300">01 Profile</span><span class="text-surface-700">/</span><span class="text-white">02 Setup</span><span class="text-surface-700">/</span><span>03 Interview</span>
                 </div>
-                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
-                    <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width:40%"></div>
-                </div>
+                <span class="text-surface-500 text-xs font-mono">2 of 3</span>
             </div>
-        </div>
+        </header>
 
-        <div class="max-w-5xl mx-auto px-4 pt-28">
-            <div class="mb-10 max-w-3xl">
-                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-6">
-                    <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Session setup
+        <main class="max-w-6xl mx-auto px-5 sm:px-8 py-10 sm:py-14">
+            <div class="max-w-3xl mb-10">
+                <div class="inline-flex items-center gap-2 rounded-full border border-indigo-400/20 bg-indigo-400/10 px-3 py-1 text-[11px] font-semibold text-indigo-300 mb-5">
+                    <i data-lucide="sparkles" class="w-3.5 h-3.5"></i> Personalize your session
                 </div>
-                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-                    <div>
-                        <h1 class="text-4xl font-bold text-white mb-3 tracking-tight">Ready, ${name}?</h1>
-                        <p class="text-slate-400 text-sm max-w-xl leading-6">Set the pace for this session. Your interviewer will adapt follow-ups to match the level you choose.</p>
-                    </div>
-                    <div class="text-right shrink-0">
-                        <div class="text-[10px] uppercase tracking-[.2em] text-slate-500 font-bold">Session length</div>
-                        <div class="text-white font-semibold mt-1">${state.questions.length} questions</div>
-                    </div>
-                </div>
+                <h1 class="text-3xl sm:text-5xl font-semibold tracking-tight text-white">Set the tone for your interview.</h1>
+                <p class="mt-4 text-sm sm:text-base leading-7 text-surface-400 max-w-2xl">Choose a difficulty that matches where you are today. Your interviewer will adapt the conversation and follow-ups around this choice.</p>
             </div>
-            <div class="grid lg:grid-cols-[1fr_1fr] gap-8">
 
-            <!-- Profile Summary -->
-            <div class="interview-panel p-6 backdrop-blur-xl">
-                <h3 class="text-white font-semibold mb-6 text-sm flex items-center gap-2">
-                    <i data-lucide="user" class="w-4 h-4 text-blue-400"></i> Candidate Profile
-                </h3>
-                <div class="space-y-6">
-                    <div>
-                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1.5 block">Target Role</span>
-                        <div class="text-slate-200 text-sm font-semibold bg-white/5 border border-white/10 px-3 py-2 rounded-lg inline-block">${state.jobRole}</div>
+            <div class="grid lg:grid-cols-[minmax(0,1fr)_330px] gap-6 lg:gap-10 items-start">
+                <section>
+                    <div class="flex items-end justify-between mb-4">
+                        <div><p class="text-white text-sm font-semibold">Interview difficulty</p><p class="text-surface-500 text-xs mt-1">You can change this before you begin.</p></div>
+                        <span class="text-[10px] uppercase tracking-widest text-surface-500 font-mono">Required</span>
                     </div>
-                    <div>
-                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-2.5 block">Skills Extracted</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${state.skills.map(s => `
-                                <span class="bg-blue-500/10 text-blue-300 text-xs px-2.5 py-1 rounded-md border border-blue-500/20">${s}</span>
-                            `).join('')}
+                    <div class="space-y-3">
+                        ${choices.map(choice => `
+                            <button type="button" onclick="selectDifficulty('${choice.id}')" aria-pressed="${state.difficulty === choice.id}" class="setup-choice w-full text-left p-4 sm:p-5 flex items-start gap-4 ${state.difficulty === choice.id ? 'is-selected' : ''}">
+                                <span class="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center ${state.difficulty === choice.id ? `bg-${choice.color}-400/15 text-${choice.color}-300` : 'bg-white/5 text-surface-400'}"><i data-lucide="${choice.icon}" class="w-5 h-5"></i></span>
+                                <span class="min-w-0 flex-1">
+                                    <span class="flex flex-wrap items-center gap-2"><span class="text-white font-semibold">${choice.label}</span><span class="text-[10px] text-surface-500 uppercase tracking-widest">${choice.name}</span>${choice.id === 'medium' ? '<span class="rounded-full bg-indigo-400/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-indigo-300">Recommended</span>' : ''}</span>
+                                    <span class="block text-sm leading-6 text-surface-400 mt-1">${choice.text}</span>
+                                    <span class="block text-[11px] text-surface-500 mt-2">${choice.meta}</span>
+                                </span>
+                                <span class="w-5 h-5 shrink-0 rounded-full border flex items-center justify-center mt-1 ${state.difficulty === choice.id ? 'border-indigo-300 bg-indigo-400' : 'border-surface-600'}">${state.difficulty === choice.id ? '<i data-lucide="check" class="w-3 h-3 text-slate-950"></i>' : ''}</span>
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <div class="mt-6 rounded-xl border border-white/10 bg-white/[.03] p-4 flex gap-3">
+                        <i data-lucide="info" class="w-4 h-4 text-surface-400 mt-0.5 shrink-0"></i>
+                        <p class="text-xs leading-5 text-surface-400">The difficulty changes question complexity, not your profile. Every session still uses your resume, projects, and target role.</p>
+                    </div>
+                </section>
+
+                <aside class="setup-summary p-5 lg:sticky lg:top-24">
+                    <div class="flex items-center justify-between mb-5"><div><p class="text-white text-sm font-semibold">Session preview</p><p class="text-surface-500 text-xs mt-1">What you’re bringing in</p></div><span class="setup-step-dot w-2 h-2 rounded-full bg-emerald-400"></span></div>
+                    <div class="rounded-xl border border-white/10 bg-black/10 p-4 mb-5">
+                        <p class="text-[10px] uppercase tracking-widest text-surface-500 font-semibold">Candidate</p>
+                        <p class="text-white font-medium mt-1">${name}</p>
+                        <p class="text-surface-400 text-xs mt-1">${state.jobRole}</p>
+                    </div>
+                    <div class="space-y-4 text-xs">
+                        <div class="flex items-center justify-between"><span class="text-surface-500">Questions</span><span class="text-white font-mono">${state.questions.length}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-surface-500">Difficulty</span><span class="text-indigo-300 font-semibold capitalize">${state.difficulty}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-surface-500">Focus checks</span><span class="text-emerald-300">Ready</span></div>
+                    </div>
+                    <div class="border-t border-white/10 mt-5 pt-5">
+                        <p class="text-[10px] uppercase tracking-widest text-surface-500 font-semibold mb-3">Session includes</p>
+                        <div class="space-y-2.5 text-xs text-surface-300">
+                            ${['Resume-aware prompts', 'Live voice or text answers', 'Performance feedback'].map(item => `<div class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>${item}</div>`).join('')}
                         </div>
                     </div>
-                    <div>
-                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-2.5 block">Projects Analyzed</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${state.projects.map(p => `
-                                <span class="bg-emerald-500/10 text-emerald-300 text-xs px-2.5 py-1 rounded-md border border-emerald-500/20">${p}</span>
-                            `).join('')}
-                        </div>
-                    </div>
-                    <div>
-                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1.5 block">Experience Level</span>
-                        <div class="text-slate-300 text-sm font-medium">${state.experience}</div>
-                    </div>
-                </div>
+                    <button onclick="startInterview()" class="w-full mt-6 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2">Start interview <i data-lucide="arrow-up-right" class="w-4 h-4"></i></button>
+                </aside>
             </div>
+        </main>
+    </div>`;
 
-            <div class="space-y-8">
-            <!-- Difficulty Selector -->
-            <div class="interview-panel p-6 backdrop-blur-xl">
-                <h3 class="text-white font-semibold mb-2 text-sm flex items-center gap-2">
-                    <i data-lucide="bar-chart" class="w-4 h-4 text-emerald-400"></i> Interview Difficulty
-                </h3>
-                <p class="text-slate-400 text-xs mb-5">Choose how much challenge you want in technical depth and follow-up questions.</p>
-                <div class="grid md:grid-cols-3 gap-3">
-                    <button onclick="selectDifficulty('easy')"
-                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
-                               ${state.difficulty === 'easy'
-                                   ? 'is-selected border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
-                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-easy">
-                        <span class="flex items-center justify-between w-full"><i data-lucide="sprout" class="w-5 h-5 ${state.difficulty === 'easy' ? 'text-emerald-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'easy' ? '<span class="text-[9px] uppercase tracking-widest text-emerald-300">Selected</span>' : ''}</span>
-                        <span class="text-white font-semibold mt-2">Warm-up</span>
-                        <span class="text-xs text-slate-400 leading-5">Build confidence with foundational prompts.</span>
-                        ${state.difficulty === 'easy' ? '<div class="absolute inset-0 bg-emerald-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
-                    </button>
-                    <button onclick="selectDifficulty('medium')"
-                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
-                               ${state.difficulty === 'medium'
-                                   ? 'is-selected border-blue-500/50 bg-blue-500/10 text-blue-300'
-                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-medium">
-                        <span class="flex items-center justify-between w-full"><i data-lucide="target" class="w-5 h-5 ${state.difficulty === 'medium' ? 'text-blue-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'medium' ? '<span class="text-[9px] uppercase tracking-widest text-blue-300">Selected</span>' : ''}</span>
-                        <span class="text-white font-semibold mt-2">Balanced</span>
-                        <span class="text-xs text-slate-400 leading-5">A realistic mix of breadth, depth, and follow-ups.</span>
-                        ${state.difficulty === 'medium' ? '<div class="absolute inset-0 bg-blue-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
-                    </button>
-                    <button onclick="selectDifficulty('hard')"
-                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
-                               ${state.difficulty === 'hard'
-                                   ? 'is-selected border-rose-500/50 bg-rose-500/10 text-rose-300'
-                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-hard">
-                        <span class="flex items-center justify-between w-full"><i data-lucide="flame" class="w-5 h-5 ${state.difficulty === 'hard' ? 'text-rose-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'hard' ? '<span class="text-[9px] uppercase tracking-widest text-rose-300">Selected</span>' : ''}</span>
-                        <span class="text-white font-semibold mt-2">Stretch</span>
-                        <span class="text-xs text-slate-400 leading-5">Push into ambiguous scenarios and deeper reasoning.</span>
-                        ${state.difficulty === 'hard' ? '<div class="absolute inset-0 bg-rose-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
-                    </button>
-                </div>
-                <div class="text-slate-400 text-xs mt-6 text-center font-mono bg-white/5 py-2 rounded-lg border border-white/5">
-                    Planned: ${state.questions.length} questions (${state.difficulty.toUpperCase()} tier)
-                </div>
-            </div>
-
-            <!-- Guidelines -->
-            <div class="bg-white/[0.02] border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
-                <h3 class="text-white font-semibold mb-4 text-sm flex items-center gap-2">
-                    <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Guidelines
-                </h3>
-                <ul class="space-y-3 text-sm text-slate-300">
-                    ${_guidelineItem('Speak clearly — real-time transcription is active')}
-                    ${_guidelineItem('Enable webcam for eye contact and emotion metrics')}
-                    ${_guidelineItem('Stay in frame — AI flags multiple faces or phone usage')}
-                    ${_guidelineItem('Expect dynamic follow-ups based on your explanations')}
-                </ul>
-            </div>
-
-            <div class="flex flex-col gap-3">
-                <button onclick="startInterview()"
-                    class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] group">
-                    Begin Interview <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
-                </button>
-                <button onclick="state.step=1;render()"
-                    class="w-full text-slate-400 hover:text-white py-3 text-sm transition-colors font-semibold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5">
-                    Go back
-                </button>
-            </div>
-
-            </div>
-            </div>
-        </div>
-    </div>
-    `;
-
-    if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
+    if (window.lucide) setTimeout(() => lucide.createIcons(), 10);
 }
 
 function selectDifficulty(diff) {
     state.difficulty = diff;
-    // Note: Questions are already fetched from backend, don't regenerate
     renderInterviewSetup();
-}
-
-/* ---- private ---- */
-
-function _guidelineItem(text) {
-    return `
-    <li class="flex items-start gap-3">
-        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0"></i>
-        <span>${text}</span>
-    </li>`;
 }

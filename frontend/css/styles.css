@@ -295,6 +295,20 @@ body {
 }
 .setup-option:hover { transform: translateY(-2px); }
 .setup-option.is-selected { box-shadow: 0 0 0 1px rgba(96, 165, 250, .35), 0 16px 34px rgba(37, 99, 235, .14); }
+.setup-choice {
+    background: rgba(15, 23, 42, .72);
+    border: 1px solid rgba(148, 163, 184, .16);
+    border-radius: 16px;
+    transition: border-color .2s ease, background .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.setup-choice:hover { transform: translateY(-2px); border-color: rgba(148, 163, 184, .36); background: rgba(30, 41, 59, .82); }
+.setup-choice.is-selected { border-color: rgba(129, 140, 248, .85); background: linear-gradient(135deg, rgba(79, 70, 229, .2), rgba(15, 23, 42, .82)); box-shadow: 0 14px 34px rgba(30, 41, 107, .25), inset 0 0 0 1px rgba(129, 140, 248, .18); }
+.setup-summary {
+    background: linear-gradient(160deg, rgba(30, 41, 59, .92), rgba(15, 23, 42, .8));
+    border: 1px solid rgba(148, 163, 184, .16);
+    border-radius: 18px;
+}
+.setup-step-dot { box-shadow: 0 0 0 5px rgba(99, 102, 241, .09); }
 .nav-link { position: relative; }
 .nav-link::after {
     content: "";
