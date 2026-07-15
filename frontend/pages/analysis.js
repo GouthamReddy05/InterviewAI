@@ -4,36 +4,33 @@
 
 function renderAnalysis() {
     const agents = [
-        { id: 'resumeAnalyzer',   label: 'Resume Analyzer Agent',   icon: '📄' },
-        { id: 'questionGenerator', label: 'Question Generator Agent', icon: '❓' },
-        { id: 'faceMonitor',      label: 'Face Monitor Agent',       icon: '👁️' }
+        { id: 'resumeAnalyzer',   label: 'Profile Extraction',   icon: 'file-text' },
+        { id: 'questionGenerator', label: 'Question Generation', icon: 'list-todo' },
+        { id: 'faceMonitor',      label: 'Vision Configuration',       icon: 'camera' }
     ];
 
     app.innerHTML = `
-    <div class="min-h-screen bg-surface-950 flex items-center justify-center px-4 py-8">
+    <div class="ia-page font-sans selection:bg-blue-200/60 flex items-center justify-center px-4 py-8">
         <div class="max-w-2xl w-full text-center">
-            <div class="w-14 h-14 bg-accent-600/20 rounded-2xl flex items-center justify-center mx-auto mb-6 pulse-ring">
-                <svg class="w-7 h-7 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
+            <div class="w-16 h-16 bg-slate-950 text-white rounded-lg flex items-center justify-center mx-auto mb-6 pulse-ring">
+                <i data-lucide="loader" class="w-8 h-8 animate-spin"></i>
             </div>
-            <h2 class="text-xl font-bold text-white mb-1">Analyzing your resume</h2>
-            <p class="text-surface-400 text-sm mb-6">Our AI agents are extracting skills, projects, and experience...</p>
+            <h2 class="text-2xl font-bold text-slate-950 mb-2 tracking-tight">Processing your profile</h2>
+            <p class="text-slate-600 text-sm mb-10">Extracting skills, generating tailored questions, and configuring the interview environment.</p>
 
             <!-- Agent Progress Boxes -->
-            <div class="grid sm:grid-cols-3 gap-3 text-left max-w-xl mx-auto mb-6">
+            <div class="grid sm:grid-cols-3 gap-4 text-left max-w-xl mx-auto mb-10">
                 ${agents.map(agent => `
-                <div class="glass rounded-xl p-3 border border-surface-800" id="agent-${agent.id}">
-                    <div class="flex items-center gap-2 mb-2">
-                        <div class="text-base">${agent.icon}</div>
-                        <div class="text-white text-xs font-semibold truncate">${agent.label}</div>
+                <div class="ia-card p-4 text-left" id="agent-${agent.id}">
+                    <div class="flex items-center gap-3 mb-3">
+                        <i data-lucide="${agent.icon}" class="w-4 h-4 text-blue-600"></i>
+                        <div class="text-slate-950 text-sm font-semibold truncate tracking-tight">${agent.label}</div>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <div class="flex-1 bg-surface-800 rounded-full h-1">
-                            <div class="bg-accent-600 h-1 rounded-full transition-all duration-700" style="width:0%" id="progress-${agent.id}"></div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex-1 bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-700" style="width:0%" id="progress-${agent.id}"></div>
                         </div>
-                        <span class="text-surface-500 text-[10px] font-mono" id="status-${agent.id}">Wait</span>
+                        <span class="text-slate-500 text-[10px] font-mono uppercase tracking-widest" id="status-${agent.id}">Wait</span>
                     </div>
                 </div>
                 `).join('')}
@@ -41,23 +38,25 @@ function renderAnalysis() {
 
             <!-- Terminal-style Log Console -->
             <div class="max-w-xl mx-auto">
-                <div class="bg-surface-950 border border-surface-800 rounded-xl overflow-hidden shadow-2xl">
-                    <div class="bg-surface-900 px-4 py-2 border-b border-surface-800 flex items-center justify-between">
-                        <div class="flex items-center gap-1.5">
-                            <span class="w-2.5 h-2.5 bg-red-500/20 border border-red-500/40 rounded-full"></span>
-                            <span class="w-2.5 h-2.5 bg-yellow-500/20 border border-yellow-500/40 rounded-full"></span>
-                            <span class="w-2.5 h-2.5 bg-green-500/20 border border-green-500/40 rounded-full"></span>
+                <div class="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
+                    <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="w-2.5 h-2.5 bg-rose-400 rounded-full"></span>
+                            <span class="w-2.5 h-2.5 bg-amber-400 rounded-full"></span>
+                            <span class="w-2.5 h-2.5 bg-emerald-400 rounded-full"></span>
                         </div>
-                        <span class="text-[10px] font-mono text-surface-500">Agentic Orchestrator v1.2.0</span>
+                        <span class="text-[10px] font-mono text-slate-400 uppercase tracking-wider">Initialization Log</span>
                     </div>
-                    <div class="p-4 font-mono text-[11px] text-left text-surface-300 h-64 overflow-y-auto space-y-1.5" id="terminalConsole">
-                        <div class="text-accent-400/70">> [System] Spawning Agentic System...</div>
+                    <div class="p-5 font-mono text-xs text-left text-slate-300 h-64 overflow-y-auto space-y-2 leading-relaxed" id="terminalConsole">
+                        <div class="text-white">> [System] Initializing session...</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
     `;
+
+    if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 }
 
 async function simulateAnalysis() {
@@ -67,13 +66,13 @@ async function simulateAnalysis() {
         if (!consoleEl) return;
         const line = document.createElement('div');
         if (type === 'system') {
-            line.className = 'text-accent-400 font-semibold';
+            line.className = 'text-white font-medium';
         } else if (type === 'success') {
-            line.className = 'text-success-400';
+                line.className = 'text-emerald-400';
         } else if (type === 'error') {
-            line.className = 'text-danger-400';
+            line.className = 'text-[#ef4444]';
         } else {
-            line.className = 'text-surface-300';
+            line.className = 'text-[#888888]';
         }
         line.textContent = text;
         consoleEl.appendChild(line);
@@ -87,57 +86,57 @@ async function simulateAnalysis() {
         if (statusEl) {
             statusEl.textContent = label;
             if (isFinished) {
-                statusEl.className = 'text-success-400 font-mono';
+                statusEl.className = 'text-emerald-600 font-mono text-[10px] uppercase tracking-widest';
                 state.agentStatus[id] = 'complete';
             } else {
-                statusEl.className = 'text-accent-400 font-mono animate-pulse';
+                statusEl.className = 'text-blue-600 font-mono text-[10px] uppercase tracking-widest animate-pulse';
             }
         }
     }
 
     try {
-        logMessage(`> [System] Spawning Agentic System...`, 'system');
+        logMessage(`> [System] Initializing backend processes...`, 'system');
         
         // --- STEP 1 & 2: Backend Upload and Generation ---
-        logMessage(`> [Backend] Uploading resume and generating questions...`);
+        logMessage(`> [Process] Uploading resume and retrieving questions...`);
         updateAgentProgress('resumeAnalyzer', 30, 'Uploading');
         updateAgentProgress('questionGenerator', 30, 'Waiting');
 
         await uploadResumeToBackend();
 
         if (state.questions && state.questions.length > 0) {
-            logMessage(`> [Resume Analyzer] Parse successful!`, 'success');
+            logMessage(`> [Extractor] Resume parsed successfully!`, 'success');
             updateAgentProgress('resumeAnalyzer', 100, 'Complete', true);
 
-            logMessage(`> [Question Generator] Successfully retrieved ${state.questions.length} tailored questions from backend!`, 'success');
+            logMessage(`> [Generator] Successfully configured ${state.questions.length} tailored questions!`, 'success');
             updateAgentProgress('questionGenerator', 100, 'Complete', true);
         } else {
-            throw new Error("Failed to get questions from backend");
+            throw new Error("Failed to configure session from backend");
         }
 
         // --- STEP 3: FACE MONITORING AGENT (MediaPipe CV setup) ---
-        logMessage(`> [System] Spawning Agent: Face Monitoring Agent...`, 'system');
-        updateAgentProgress('faceMonitor', 20, 'Initializing');
+        logMessage(`> [System] Connecting to vision system...`, 'system');
+        updateAgentProgress('faceMonitor', 20, 'Connecting');
         
         await new Promise(r => setTimeout(r, 600));
-        logMessage(`> [Face Monitor] Setting up browser MediaPipe FaceMesh bindings...`);
-        updateAgentProgress('faceMonitor', 60, 'Loading Models');
+        logMessage(`> [Vision] Loading MediaPipe FaceMesh models...`);
+        updateAgentProgress('faceMonitor', 60, 'Loading');
         
         await new Promise(r => setTimeout(r, 800));
-        logMessage(`> [Face Monitor] MediaPipe Face Mesh model loaded successfully. Camera tracker active.`, 'success');
+        logMessage(`> [Vision] Face Mesh loaded. Camera tracker ready.`, 'success');
         updateAgentProgress('faceMonitor', 100, 'Complete', true);
         
-        logMessage(`> [System] Orchestration complete. Launching Setup screen...`, 'system');
+        logMessage(`> [System] Setup complete. Proceeding...`, 'system');
         
         await new Promise(r => setTimeout(r, 1000));
         state.step = 3;
         render();
 
     } catch (globalError) {
-        logMessage(`> [System Error] Critical orchestrator failure: ${globalError.message}`, 'error');
-        console.error("Critical simulation error", globalError);
+        logMessage(`> [System Error] Critical setup failure: ${globalError.message}`, 'error');
+        console.error("Critical setup error", globalError);
         
-        logMessage(`> [System] HALTING: Please check the backend server.`, 'error');
-        alert("Backend API failed. Please ensure the Python server is running.");
+        logMessage(`> [System] HALTING: Connection to server failed.`, 'error');
+        alert("Backend API failed. Please ensure the server is running.");
     }
 }

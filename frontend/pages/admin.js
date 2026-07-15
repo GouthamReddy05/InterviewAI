@@ -4,73 +4,76 @@
 
 function renderAdmin() {
     app.innerHTML = `
-    <div class="min-h-screen bg-surface-950 flex flex-col">
+    <div class="ia-page font-sans selection:bg-blue-200/60 flex flex-col">
         <!-- Navbar -->
-        <nav class="bg-surface-900 border-b border-surface-800 px-6 py-4 flex items-center justify-between">
+        <nav class="ia-topbar px-6 py-4 flex items-center justify-between sticky top-0 z-50">
             <div class="flex items-center gap-3">
-                <div class="w-8 h-8 bg-success-600 rounded-lg flex items-center justify-center">
-                    <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
-                    </svg>
-                </div>
-                <h1 class="text-success-400 font-bold text-xl tracking-wide">Admin Dashboard</h1>
+                <span class="w-9 h-9 rounded-lg bg-slate-950 text-white flex items-center justify-center">
+                    <i data-lucide="shield-check" class="w-5 h-5"></i>
+                </span>
+                <h1 class="text-slate-950 font-semibold text-lg tracking-tight">Admin Dashboard</h1>
             </div>
             <div class="flex items-center gap-6">
-                <button onclick="state.step=0;render()" class="text-surface-400 hover:text-white transition-colors text-sm font-medium">Back to Home</button>
-                <button id="logoutBtn" class="text-danger-400 hover:text-danger-300 transition-colors text-sm font-medium">Logout</button>
+                <button onclick="state.step=0;render()" class="text-slate-600 hover:text-slate-950 transition-colors text-sm font-semibold">Home</button>
+                <button id="logoutBtn" class="ia-button-secondary px-4 py-1.5 text-sm font-semibold">Logout</button>
             </div>
         </nav>
 
         <!-- Main Content -->
-        <div class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
-            <div id="errorBox" class="hidden bg-danger-500/10 border border-danger-500/20 text-danger-400 p-4 rounded-xl text-sm mb-8 text-center font-medium"></div>
+        <div class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10">
+            <div class="mb-8">
+                <div class="ia-chip mb-4"><i data-lucide="database" class="w-3.5 h-3.5 text-blue-600"></i> Operations</div>
+                <h2 class="text-3xl font-bold tracking-tight text-slate-950">Users and sessions</h2>
+                <p class="text-sm text-slate-600 mt-2">A compact view of platform activity, roles, interview status, and scores.</p>
+            </div>
+            <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-lg text-sm mb-8 text-center"></div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
                 <!-- Users Table -->
-                <div class="bg-surface-900 border border-surface-800 rounded-2xl p-6 shadow-xl">
+                <div class="ia-card p-6 relative overflow-hidden">
                     <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+                        <h2 class="text-slate-950 font-semibold text-lg flex items-center gap-2">
                             Registered Users 
-                            <span id="userCount" class="bg-success-500/20 text-success-400 py-1 px-3 rounded-full text-xs font-bold">0</span>
+                            <span id="userCount" class="bg-blue-50 text-blue-700 border border-blue-100 py-0.5 px-2.5 rounded-full text-[10px] uppercase tracking-wider font-mono">0</span>
                         </h2>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
-                            <thead class="text-xs text-surface-400 uppercase bg-surface-800/50">
+                            <thead class="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                                 <tr>
-                                    <th class="px-4 py-3 rounded-tl-lg">ID</th>
-                                    <th class="px-4 py-3">Username</th>
-                                    <th class="px-4 py-3">Email</th>
-                                    <th class="px-4 py-3 rounded-tr-lg">Role</th>
+                                    <th class="px-4 py-3 font-normal">ID</th>
+                                    <th class="px-4 py-3 font-normal">Username</th>
+                                    <th class="px-4 py-3 font-normal">Email</th>
+                                    <th class="px-4 py-3 font-normal">Role</th>
                                 </tr>
                             </thead>
-                            <tbody id="usersTableBody" class="divide-y divide-surface-800 text-surface-200">
-                                <tr><td colspan="4" class="px-4 py-8 text-center text-surface-500">Loading...</td></tr>
+                            <tbody id="usersTableBody" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
                 </div>
 
                 <!-- Interviews Table -->
-                <div class="bg-surface-900 border border-surface-800 rounded-2xl p-6 shadow-xl">
+                <div class="ia-card p-6 relative overflow-hidden">
                     <div class="flex items-center justify-between mb-6">
-                        <h2 class="text-white font-semibold text-lg flex items-center gap-2">
+                        <h2 class="text-slate-950 font-semibold text-lg flex items-center gap-2">
                             Interview Sessions 
-                            <span id="interviewCount" class="bg-accent-500/20 text-accent-400 py-1 px-3 rounded-full text-xs font-bold">0</span>
+                            <span id="interviewCount" class="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2.5 rounded-full text-[10px] uppercase tracking-wider font-mono">0</span>
                         </h2>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-sm text-left">
-                            <thead class="text-xs text-surface-400 uppercase bg-surface-800/50">
+                            <thead class="text-xs text-slate-500 uppercase tracking-wider border-b border-slate-200">
                                 <tr>
-                                    <th class="px-4 py-3 rounded-tl-lg">User</th>
-                                    <th class="px-4 py-3">Role</th>
-                                    <th class="px-4 py-3">Status</th>
-                                    <th class="px-4 py-3 rounded-tr-lg">Score</th>
+                                    <th class="px-4 py-3 font-normal">User</th>
+                                    <th class="px-4 py-3 font-normal">Role</th>
+                                    <th class="px-4 py-3 font-normal">Status</th>
+                                    <th class="px-4 py-3 font-normal">Score</th>
                                 </tr>
                             </thead>
-                            <tbody id="interviewsTableBody" class="divide-y divide-surface-800 text-surface-200">
-                                <tr><td colspan="4" class="px-4 py-8 text-center text-surface-500">Loading...</td></tr>
+                            <tbody id="interviewsTableBody" class="divide-y divide-slate-100 text-slate-600">
+                                <tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -79,6 +82,7 @@ function renderAdmin() {
         </div>
     </div>
     `;
+    if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 
     setTimeout(async () => {
         const token = localStorage.getItem('interviewai_token');
@@ -115,18 +119,18 @@ function renderAdmin() {
                 const tbody = document.getElementById('usersTableBody');
                 tbody.innerHTML = '';
                 if (users.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-surface-500">No users found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No users found</td></tr>';
                 }
                 users.forEach(u => {
                     const roleBadge = u.is_admin 
-                        ? '<span class="bg-accent-500/20 text-accent-400 py-1 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wide">Admin</span>' 
-                        : '<span class="bg-surface-700 text-surface-300 py-1 px-2.5 rounded-full text-[10px] font-bold uppercase tracking-wide">User</span>';
+                        ? '<span class="bg-slate-950 text-white border border-slate-950 py-1 px-2.5 rounded-md text-[10px] font-semibold tracking-wide">Admin</span>' 
+                        : '<span class="bg-slate-100 text-slate-600 border border-slate-200 py-1 px-2.5 rounded-md text-[10px] font-semibold tracking-wide">User</span>';
                     tbody.innerHTML += `
-                        <tr class="hover:bg-surface-800/30 transition-colors">
-                            <td class="px-4 py-3 font-mono text-surface-400">#${u.id}</td>
-                            <td class="px-4 py-3 font-medium text-white">${u.username}</td>
-                            <td class="px-4 py-3">${u.email}</td>
-                            <td class="px-4 py-3">${roleBadge}</td>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-4 font-mono text-slate-400 text-xs">#${u.id}</td>
+                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${u.username}</td>
+                            <td class="px-4 py-4 text-sm">${u.email}</td>
+                            <td class="px-4 py-4">${roleBadge}</td>
                         </tr>`;
                 });
             }
@@ -140,17 +144,17 @@ function renderAdmin() {
                 const tbody = document.getElementById('interviewsTableBody');
                 tbody.innerHTML = '';
                 if (interviews.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-surface-500">No interviews found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No interviews found</td></tr>';
                 }
                 interviews.forEach(i => {
-                    const statusClass = i.status === 'completed' ? 'text-success-400 bg-success-400/10' : 'text-warning-400 bg-warning-400/10';
-                    const score = i.score !== null ? `<span class="font-bold text-white">${Math.round(i.score)}%</span>` : '<span class="text-surface-500">-</span>';
+                    const statusClass = i.status === 'completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-100' : 'text-amber-700 bg-amber-50 border-amber-100';
+                    const score = i.score !== null ? `<span class="font-semibold text-slate-950">${Math.round(i.score)}</span><span class="text-slate-400 text-[10px]">/100</span>` : '<span class="text-slate-400">-</span>';
                     tbody.innerHTML += `
-                        <tr class="hover:bg-surface-800/30 transition-colors">
-                            <td class="px-4 py-3 font-medium text-white">${i.username}</td>
-                            <td class="px-4 py-3">${i.job_role}</td>
-                            <td class="px-4 py-3"><span class="px-2 py-1 rounded-md text-[11px] font-bold uppercase tracking-wider ${statusClass}">${i.status}</span></td>
-                            <td class="px-4 py-3">${score}</td>
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${i.username}</td>
+                            <td class="px-4 py-4 text-sm">${i.job_role}</td>
+                            <td class="px-4 py-4"><span class="px-2.5 py-1 border rounded-md text-[10px] font-medium tracking-wider ${statusClass}">${i.status}</span></td>
+                            <td class="px-4 py-4 text-sm">${score}</td>
                         </tr>`;
                 });
             }
@@ -159,8 +163,8 @@ function renderAdmin() {
             const errorBox = document.getElementById('errorBox');
             errorBox.textContent = err.message || 'Failed to load admin data';
             errorBox.classList.remove('hidden');
-            document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-danger-400">Error loading data</td></tr>';
-            document.getElementById('interviewsTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-danger-400">Error loading data</td></tr>';
+            document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-rose-600">Error loading data</td></tr>';
+            document.getElementById('interviewsTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-rose-600">Error loading data</td></tr>';
         }
     }, 100);
 }

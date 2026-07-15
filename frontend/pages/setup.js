@@ -6,109 +6,146 @@ function renderInterviewSetup() {
     const name = state.candidateName || 'Candidate';
 
     app.innerHTML = `
-    <div class="min-h-screen bg-surface-950">
+    <div class="ia-page font-sans selection:bg-blue-500/30 pb-16 bg-slate-950 text-slate-200 min-h-screen">
         <!-- Progress Bar -->
-        <div class="fixed top-0 w-full z-40 bg-surface-950/90 backdrop-blur-sm border-b border-surface-800">
-            <div class="max-w-3xl mx-auto px-4 py-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-white text-sm font-medium">Setup Interview</span>
-                    <span class="text-surface-500 text-xs">Step 2 of 5</span>
+        <div class="fixed top-0 w-full z-40 bg-slate-950/80 backdrop-blur-md border-b border-white/10">
+            <div class="max-w-5xl mx-auto px-4 py-4">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-white text-sm font-semibold tracking-tight">Interview Parameters</span>
+                    <span class="text-slate-400 text-xs font-mono">Step 2 of 5</span>
                 </div>
-                <div class="w-full bg-surface-800 rounded-full h-1.5">
-                    <div class="bg-accent-600 h-1.5 rounded-full" style="width:40%"></div>
+                <div class="w-full bg-white/5 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]" style="width:40%"></div>
                 </div>
             </div>
         </div>
 
-        <div class="max-w-2xl mx-auto px-4 pt-24 pb-16">
-            <h1 class="text-2xl font-bold text-white mb-2">Ready, ${name}?</h1>
-            <p class="text-surface-400 text-sm mb-8">Here's what your interview will look like.</p>
+        <div class="max-w-5xl mx-auto px-4 pt-28">
+            <div class="mb-10 max-w-3xl">
+                <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-6">
+                    <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5"></i> Session setup
+                </div>
+                <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+                    <div>
+                        <h1 class="text-4xl font-bold text-white mb-3 tracking-tight">Ready, ${name}?</h1>
+                        <p class="text-slate-400 text-sm max-w-xl leading-6">Set the pace for this session. Your interviewer will adapt follow-ups to match the level you choose.</p>
+                    </div>
+                    <div class="text-right shrink-0">
+                        <div class="text-[10px] uppercase tracking-[.2em] text-slate-500 font-bold">Session length</div>
+                        <div class="text-white font-semibold mt-1">${state.questions.length} questions</div>
+                    </div>
+                </div>
+            </div>
+            <div class="grid lg:grid-cols-[1fr_1fr] gap-8">
 
             <!-- Profile Summary -->
-            <div class="glass rounded-xl p-6 mb-6 border border-surface-800">
-                <h3 class="text-white font-medium mb-4 text-sm">Your Profile</h3>
-                <div class="space-y-3">
+            <div class="interview-panel p-6 backdrop-blur-xl">
+                <h3 class="text-white font-semibold mb-6 text-sm flex items-center gap-2">
+                    <i data-lucide="user" class="w-4 h-4 text-blue-400"></i> Candidate Profile
+                </h3>
+                <div class="space-y-6">
                     <div>
-                        <span class="text-surface-500 text-[10px] uppercase tracking-wider">Target Role</span>
-                        <div class="text-white text-sm mt-0.5">${state.jobRole}</div>
+                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1.5 block">Target Role</span>
+                        <div class="text-slate-200 text-sm font-semibold bg-white/5 border border-white/10 px-3 py-2 rounded-lg inline-block">${state.jobRole}</div>
                     </div>
                     <div>
-                        <span class="text-surface-500 text-[10px] uppercase tracking-wider">Skills Extracted</span>
-                        <div class="flex flex-wrap gap-2 mt-1">
+                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-2.5 block">Skills Extracted</span>
+                        <div class="flex flex-wrap gap-2">
                             ${state.skills.map(s => `
-                                <span class="bg-accent-600/10 text-accent-400 text-xs px-2.5 py-1 rounded-full border border-accent-500/10">${s}</span>
+                                <span class="bg-blue-500/10 text-blue-300 text-xs px-2.5 py-1 rounded-md border border-blue-500/20">${s}</span>
                             `).join('')}
                         </div>
                     </div>
                     <div>
-                        <span class="text-surface-500 text-[10px] uppercase tracking-wider">Projects Analyzed</span>
-                        <div class="flex flex-wrap gap-2 mt-1">
+                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-2.5 block">Projects Analyzed</span>
+                        <div class="flex flex-wrap gap-2">
                             ${state.projects.map(p => `
-                                <span class="bg-surface-800 text-surface-300 text-xs px-2.5 py-1 rounded-full border border-surface-700/50">${p}</span>
+                                <span class="bg-emerald-500/10 text-emerald-300 text-xs px-2.5 py-1 rounded-md border border-emerald-500/20">${p}</span>
                             `).join('')}
                         </div>
                     </div>
                     <div>
-                        <span class="text-surface-500 text-[10px] uppercase tracking-wider">Experience Level</span>
-                        <div class="text-white text-sm mt-0.5">${state.experience}</div>
+                        <span class="text-slate-500 text-[10px] uppercase tracking-widest font-bold mb-1.5 block">Experience Level</span>
+                        <div class="text-slate-300 text-sm font-medium">${state.experience}</div>
                     </div>
                 </div>
             </div>
 
+            <div class="space-y-8">
             <!-- Difficulty Selector -->
-            <div class="glass rounded-xl p-6 mb-6 border border-surface-800">
-                <h3 class="text-white font-medium mb-2 text-sm">Select Interview Difficulty</h3>
-                <p class="text-surface-400 text-xs mb-4">Adjust the complexity and types of technical questions you will be asked.</p>
-                <div class="grid grid-cols-3 gap-3">
+            <div class="interview-panel p-6 backdrop-blur-xl">
+                <h3 class="text-white font-semibold mb-2 text-sm flex items-center gap-2">
+                    <i data-lucide="bar-chart" class="w-4 h-4 text-emerald-400"></i> Interview Difficulty
+                </h3>
+                <p class="text-slate-400 text-xs mb-5">Choose how much challenge you want in technical depth and follow-up questions.</p>
+                <div class="grid md:grid-cols-3 gap-3">
                     <button onclick="selectDifficulty('easy')"
-                        class="p-3 rounded-lg border text-center transition-all text-xs font-medium
+                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
                                ${state.difficulty === 'easy'
-                                   ? 'border-success-500 bg-success-500/10 text-success-400'
-                                   : 'border-surface-700 bg-surface-900/50 text-surface-400 hover:border-surface-600 hover:text-surface-300'}" id="diff-easy">
-                        🟢 Easy
+                                   ? 'is-selected border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-easy">
+                        <span class="flex items-center justify-between w-full"><i data-lucide="sprout" class="w-5 h-5 ${state.difficulty === 'easy' ? 'text-emerald-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'easy' ? '<span class="text-[9px] uppercase tracking-widest text-emerald-300">Selected</span>' : ''}</span>
+                        <span class="text-white font-semibold mt-2">Warm-up</span>
+                        <span class="text-xs text-slate-400 leading-5">Build confidence with foundational prompts.</span>
+                        ${state.difficulty === 'easy' ? '<div class="absolute inset-0 bg-emerald-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
                     </button>
                     <button onclick="selectDifficulty('medium')"
-                        class="p-3 rounded-lg border text-center transition-all text-xs font-medium
+                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
                                ${state.difficulty === 'medium'
-                                   ? 'border-warning-500 bg-warning-500/10 text-warning-400'
-                                   : 'border-surface-700 bg-surface-900/50 text-surface-400 hover:border-surface-600 hover:text-surface-300'}" id="diff-medium">
-                        🟡 Medium
+                                   ? 'is-selected border-blue-500/50 bg-blue-500/10 text-blue-300'
+                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-medium">
+                        <span class="flex items-center justify-between w-full"><i data-lucide="target" class="w-5 h-5 ${state.difficulty === 'medium' ? 'text-blue-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'medium' ? '<span class="text-[9px] uppercase tracking-widest text-blue-300">Selected</span>' : ''}</span>
+                        <span class="text-white font-semibold mt-2">Balanced</span>
+                        <span class="text-xs text-slate-400 leading-5">A realistic mix of breadth, depth, and follow-ups.</span>
+                        ${state.difficulty === 'medium' ? '<div class="absolute inset-0 bg-blue-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
                     </button>
                     <button onclick="selectDifficulty('hard')"
-                        class="p-3 rounded-lg border text-center transition-all text-xs font-medium
+                        class="setup-option relative p-4 rounded-xl border text-left transition-all duration-300 text-sm font-medium flex flex-col items-start gap-2 overflow-hidden group
                                ${state.difficulty === 'hard'
-                                   ? 'border-danger-500 bg-danger-500/10 text-danger-400'
-                                   : 'border-surface-700 bg-surface-900/50 text-surface-400 hover:border-surface-600 hover:text-surface-300'}" id="diff-hard">
-                        🔴 Hard
+                                   ? 'is-selected border-rose-500/50 bg-rose-500/10 text-rose-300'
+                                   : 'border-white/10 bg-white/5 text-slate-400 hover:border-white/20 hover:text-slate-200 hover:bg-white/10'}" id="diff-hard">
+                        <span class="flex items-center justify-between w-full"><i data-lucide="flame" class="w-5 h-5 ${state.difficulty === 'hard' ? 'text-rose-400' : 'group-hover:text-slate-200'}"></i>${state.difficulty === 'hard' ? '<span class="text-[9px] uppercase tracking-widest text-rose-300">Selected</span>' : ''}</span>
+                        <span class="text-white font-semibold mt-2">Stretch</span>
+                        <span class="text-xs text-slate-400 leading-5">Push into ambiguous scenarios and deeper reasoning.</span>
+                        ${state.difficulty === 'hard' ? '<div class="absolute inset-0 bg-rose-500/20 blur-xl -z-10 rounded-xl"></div>' : ''}
                     </button>
                 </div>
-                <div class="text-surface-500 text-[11px] mt-3 italic text-center">
-                    Planned: ${state.questions.length} questions (${state.difficulty.toUpperCase()} tier + Projects & Skills check)
+                <div class="text-slate-400 text-xs mt-6 text-center font-mono bg-white/5 py-2 rounded-lg border border-white/5">
+                    Planned: ${state.questions.length} questions (${state.difficulty.toUpperCase()} tier)
                 </div>
             </div>
 
             <!-- Guidelines -->
-            <div class="glass rounded-xl p-6 mb-8 border border-surface-800">
-                <h3 class="text-white font-medium mb-3 text-sm">Interview Guidelines</h3>
-                <ul class="space-y-2 text-sm text-surface-400">
-                    ${_guidelineItem('Speak your answers clearly — real-time transcription is active')}
-                    ${_guidelineItem('Enable web camera to activate eye contact and emotion monitoring')}
-                    ${_guidelineItem('Stay inside the camera frame — AI flags multiple faces or phone usage')}
-                    ${_guidelineItem('Be ready for dynamic follow-ups based on the concepts you explain')}
+            <div class="bg-white/[0.02] border border-white/10 rounded-2xl p-6 shadow-2xl backdrop-blur-xl">
+                <h3 class="text-white font-semibold mb-4 text-sm flex items-center gap-2">
+                    <i data-lucide="info" class="w-4 h-4 text-amber-400"></i> Guidelines
+                </h3>
+                <ul class="space-y-3 text-sm text-slate-300">
+                    ${_guidelineItem('Speak clearly — real-time transcription is active')}
+                    ${_guidelineItem('Enable webcam for eye contact and emotion metrics')}
+                    ${_guidelineItem('Stay in frame — AI flags multiple faces or phone usage')}
+                    ${_guidelineItem('Expect dynamic follow-ups based on your explanations')}
                 </ul>
             </div>
 
-            <button onclick="startInterview()"
-                class="w-full bg-accent-600 hover:bg-accent-700 text-white py-3.5 rounded-xl font-medium transition-all hover:shadow-lg hover:shadow-accent-600/20">
-                Begin Interview
-            </button>
-            <button onclick="state.step=1;render()"
-                class="w-full text-surface-400 hover:text-white py-3 text-sm mt-2 transition-colors">
-                Go back
-            </button>
+            <div class="flex flex-col gap-3">
+                <button onclick="startInterview()"
+                    class="w-full bg-blue-600 hover:bg-blue-500 text-white py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all duration-300 shadow-[0_0_20px_rgba(37,99,235,0.4)] hover:shadow-[0_0_30px_rgba(37,99,235,0.6)] group">
+                    Begin Interview <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+                </button>
+                <button onclick="state.step=1;render()"
+                    class="w-full text-slate-400 hover:text-white py-3 text-sm transition-colors font-semibold bg-white/5 hover:bg-white/10 rounded-xl border border-white/5">
+                    Go back
+                </button>
+            </div>
+
+            </div>
+            </div>
         </div>
     </div>
     `;
+
+    if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 }
 
 function selectDifficulty(diff) {
@@ -121,10 +158,8 @@ function selectDifficulty(diff) {
 
 function _guidelineItem(text) {
     return `
-    <li class="flex items-start gap-2">
-        <svg class="w-4 h-4 text-accent-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
-        </svg>
-        ${text}
+    <li class="flex items-start gap-3">
+        <i data-lucide="check-circle" class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0"></i>
+        <span>${text}</span>
     </li>`;
 }

@@ -436,44 +436,51 @@ function renderActiveInterview() {
         : `Q${state.currentQuestion + 1} of ${totalQ}`;
 
     app.innerHTML = `
-    <div class="min-h-screen bg-surface-950 text-surface-200">
+    <div class="interview-shell min-h-screen text-slate-100 font-sans selection:bg-blue-300/30">
         <!-- Top Bar -->
-        <div class="fixed top-0 w-full z-40 bg-surface-950/90 backdrop-blur-sm border-b border-surface-800">
+        <div class="fixed top-0 w-full z-40 bg-slate-950/88 backdrop-blur-md border-b border-white/10">
             <div class="max-w-7xl mx-auto px-4 py-3">
                 <div class="flex items-center justify-between">
                     <div class="flex items-center gap-3">
                         <div class="flex items-center gap-2">
-                            <div class="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></div>
-                            <span class="text-white text-xs font-semibold uppercase tracking-wider">Live Simulator Feed</span>
+                            <div class="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse"></div>
+                            <span class="text-white text-xs font-semibold uppercase tracking-wider">Live Session</span>
                         </div>
-                        <span class="text-surface-700">|</span>
-                        <span class="text-surface-400 text-xs">${name} — ${state.jobRole} (${state.difficulty.toUpperCase()})</span>
+                        <span class="text-white/20">|</span>
+                        <span class="text-slate-300 text-xs hidden sm:inline">${name} &middot; ${state.jobRole}</span>
                     </div>
                     <div class="flex items-center gap-4">
-                        <span class="text-surface-300 text-xs font-mono bg-surface-900 border border-surface-800 px-2 py-1 rounded">${progressText}</span>
-                        <button onclick="endInterview()" class="text-danger-400 hover:text-danger-500 text-xs font-semibold transition-colors border border-danger-500/20 hover:border-danger-500/40 px-3 py-1 rounded-lg">
+                        <span class="text-slate-200 text-xs font-mono bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">${progressText}</span>
+                        <button onclick="endInterview()" class="text-rose-300 hover:text-white transition-colors text-xs font-semibold border border-rose-400/30 hover:bg-rose-500 px-3 py-1.5 rounded-md">
                             End Session
                         </button>
                     </div>
                 </div>
-                <div class="w-full bg-surface-900 rounded-full h-1.5 mt-2">
-                    <div class="bg-accent-600 h-1.5 rounded-full transition-all duration-500"
+                <div class="w-full bg-white/10 rounded-full h-1 mt-2.5 overflow-hidden">
+                    <div class="bg-gradient-to-r from-blue-400 to-emerald-400 h-1 rounded-full transition-all duration-500"
                          style="width:${((state.currentQuestion) / totalQ) * 100}%"></div>
                 </div>
             </div>
         </div>
 
         <div class="max-w-7xl mx-auto px-4 pt-20 pb-8">
-            <div class="grid lg:grid-cols-3 gap-6 pt-4">
+            <div class="flex items-center justify-between pt-4 pb-2">
+                <div>
+                    <p class="text-[10px] uppercase tracking-[.24em] text-blue-300 font-bold">Interview workspace</p>
+                    <h1 class="text-xl sm:text-2xl font-semibold text-white mt-1">Stay present. Think out loud.</h1>
+                </div>
+                <div class="hidden sm:flex items-center gap-2 text-[10px] text-slate-400 uppercase tracking-widest"><span class="w-2 h-2 bg-emerald-400 rounded-full"></span>Secure session</div>
+            </div>
+            <div class="grid lg:grid-cols-3 gap-6">
 
                 <!-- Left Column (Video HUD & Chat) -->
-                <div class="lg:col-span-2 space-y-4">
+                <div class="lg:col-span-2 space-y-6">
                     ${_cameraPanel()}
                     ${_chatPanel(question)}
                 </div>
 
                 <!-- Right Column (Simulator Panels & Logs) -->
-                <div class="space-y-4">
+                <div class="space-y-6">
                     ${_questionInfo(question)}
                     ${_simulationPanel()}
                     ${_liveMetrics()}
@@ -485,6 +492,8 @@ function renderActiveInterview() {
         </div>
     </div>
     `;
+
+    if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 
     const video = document.getElementById('webcam');
     if (video && state.stream) {
@@ -971,8 +980,9 @@ async function processAnswer(userAnswer) {
                     addMessage('ai', nextText);
                     render();
                 } else {
+                    const typing = document.getElementById('typingIndicator');
                     if (typing) typing.classList.add('hidden');
-                    addMessage('ai', `Thank you Goutham. We have completed the interview workflow. The orchestrator is compiling agent reports and building your feedback report...`);
+                    addMessage('ai', `Thank you ${state.candidateName || ''}. We have completed the interview. The system is now preparing your feedback report...`);
                     setTimeout(() => {
                         state.step = 5;
                         render();
@@ -1063,55 +1073,42 @@ function endInterview() {
 
 function _cameraPanel() {
     return `
-    <div class="video-container bg-surface-900 aspect-video relative rounded-xl border border-surface-800 shadow-xl overflow-hidden">
+    <div class="video-container interview-panel aspect-video relative overflow-hidden">
         ${state.stream ? `
             <video id="webcam" autoplay playsinline muted class="w-full h-full object-cover scale-x-[-1]"></video>
         ` : `
-            <div class="w-full h-full flex items-center justify-center bg-gradient-to-tr from-surface-950 to-surface-900 relative">
+            <div class="w-full h-full flex items-center justify-center bg-slate-900 relative">
                 <div class="text-center z-10">
-                    <div class="w-12 h-12 bg-surface-800 rounded-full flex items-center justify-center mx-auto mb-2 border border-surface-700">
-                        <svg class="w-6 h-6 text-surface-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                        </svg>
+                    <div class="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center mx-auto mb-3 border border-white/10">
+                        <i data-lucide="video-off" class="w-5 h-5 text-slate-300"></i>
                     </div>
-                    <p class="text-surface-400 text-xs font-semibold">Mesh Simulation Active</p>
-                    <p class="text-surface-500 text-[10px] mt-1 font-mono">Webcam stream unlinked</p>
+                    <p class="text-white text-sm font-semibold">Camera tracking offline</p>
+                    <p class="text-slate-400 text-[10px] mt-1 font-mono uppercase tracking-widest">Webcam unlinked</p>
                 </div>
-                <div class="absolute inset-0 bg-grid opacity-10"></div>
             </div>
         `}
-        <!-- Floating Canvas overlay for Landmarking and Bounding boxes -->
         <canvas id="cvCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none z-10"></canvas>
         
-        <!-- Live indicators overlaid -->
-        <div class="absolute top-3 left-3 flex items-center gap-1.5 bg-surface-950/80 backdrop-blur-sm rounded-full px-2.5 py-1 border border-surface-800 text-[9px] font-mono text-white z-20">
-            <span class="w-1.5 h-1.5 bg-success-500 rounded-full animate-ping"></span>
-            <span>CV FEED ACTIVE</span>
+        <div class="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10 z-20">
+            <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+            <span class="text-[9px] font-mono text-white tracking-widest uppercase">Feed Active</span>
         </div>
         
         <div class="absolute top-3 right-3 z-20">
-            <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-surface-800 text-[10px] font-mono">
-                <span class="text-surface-500">Session:</span>
-                <span class="text-accent-400 ml-2 font-semibold">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
+            <div class="bg-slate-950/80 backdrop-blur-md rounded-md px-3 py-1.5 border border-white/10 text-[10px] font-mono">
+                <span class="text-slate-400 uppercase tracking-widest">Session:</span>
+                <span class="text-white ml-2 font-medium">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
             </div>
         </div>
         
-        <!-- Premium Cheating Warning HUD -->
-        <div id="cheatingWarning"
-            class="absolute inset-0 bg-danger-900/40 backdrop-blur-md hidden flex-col items-center justify-center z-[100] transition-all duration-300">
-            <!-- Pulsing outer ring -->
-            <div class="absolute inset-0 border-4 border-danger-500/50 animate-pulse"></div>
-            
-            <div class="bg-surface-950/90 border border-danger-500/50 p-6 rounded-2xl shadow-[0_0_50px_rgba(244,63,94,0.5)] flex flex-col items-center transform scale-110">
-                <div class="w-16 h-16 rounded-full bg-danger-500/20 flex items-center justify-center mb-4 animate-bounce">
-                    <span class="text-danger-500 text-3xl">⚠️</span>
+        <div id="cheatingWarning" class="absolute inset-0 bg-[#ef4444]/10 backdrop-blur-md hidden flex-col items-center justify-center z-[100] transition-all duration-300">
+            <div class="absolute inset-0 border-2 border-[#ef4444]/50 animate-pulse"></div>
+            <div class="bg-slate-950 border border-rose-400/50 p-6 rounded-lg flex flex-col items-center shadow-2xl">
+                <div class="w-12 h-12 rounded-lg bg-rose-500/20 flex items-center justify-center mb-4">
+                    <i data-lucide="alert-triangle" class="w-6 h-6 text-rose-300"></i>
                 </div>
-                <div id="cheatingWarningText" class="text-danger-400 text-lg font-bold font-mono tracking-widest text-center uppercase shadow-black drop-shadow-md">
-                    PLEASE MAINTAIN EYE CONTACT
-                </div>
-                <div class="text-surface-400 text-xs font-mono mt-2 tracking-wide uppercase">
-                    Security protocol active
+                <div id="cheatingWarningText" class="text-rose-300 text-sm font-semibold tracking-wide text-center uppercase">
+                    Please maintain focus
                 </div>
             </div>
         </div>
@@ -1120,80 +1117,76 @@ function _cameraPanel() {
 
 function _chatPanel(question) {
     const micBtnClass = state.isRecording 
-        ? 'bg-danger-500 hover:bg-danger-600 pulse-ring text-white' 
-        : 'bg-accent-600 hover:bg-accent-700 text-white';
+        ? 'bg-rose-500 hover:bg-rose-600 text-white' 
+        : 'bg-blue-500 hover:bg-blue-600 text-white';
 
     const micIndicator = state.isRecording
-        ? `<div class="flex gap-0.5 items-center">
-               <span class="w-1.5 h-1.5 bg-white rounded-full wave-bar"></span>
-               <span class="w-1.5 h-2.5 bg-white rounded-full wave-bar"></span>
-               <span class="w-1.5 h-3.5 bg-white rounded-full wave-bar"></span>
-               <span class="w-1.5 h-2.5 bg-white rounded-full wave-bar"></span>
-               <span class="w-1.5 h-1.5 bg-white rounded-full wave-bar"></span>
+        ? `<div class="flex gap-1 items-center justify-center">
+               <span class="w-1 h-1 bg-white rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+               <span class="w-1 h-1 bg-white rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+               <span class="w-1 h-1 bg-white rounded-full animate-bounce" style="animation-delay: 300ms"></span>
            </div>`
-        : `<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                   d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"/>
-           </svg>`;
+        : `<i data-lucide="mic" class="w-4 h-4"></i>`;
 
     return `
-    <div class="glass rounded-xl overflow-hidden border border-surface-800 shadow-xl">
-        <div class="bg-surface-900 border-b border-surface-800 px-4 py-2.5 flex items-center justify-between">
+    <div class="interview-panel-light text-slate-950 overflow-hidden">
+        <div class="bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <span class="w-2 h-2 bg-success-500 rounded-full"></span>
-                <span class="text-white text-xs font-semibold uppercase tracking-wider">AI Dialogue Interface</span>
+                <span class="w-2 h-2 bg-blue-600 rounded-full"></span>
+                <span class="text-slate-950 text-xs font-bold uppercase tracking-wider">Dialogue</span>
             </div>
-            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Llama 3 (Groq)</span>
+            <span class="text-slate-500 text-[10px] font-mono tracking-widest uppercase">Active</span>
         </div>
 
-        <div id="chatContainer" class="p-4 space-y-3.5 max-h-72 overflow-y-auto" style="min-height:220px">
+        <div id="chatContainer" class="p-5 space-y-4 max-h-[300px] overflow-y-auto" style="min-height:260px">
             ${state.chatMessages.map(msg => `
             <div class="flex ${msg.sender === 'ai' ? 'justify-start' : 'justify-end'} fade-in">
-                <div class="chat-bubble ${msg.sender === 'ai' ? 'ai text-surface-200 bg-surface-900 border border-surface-800' : 'user text-white bg-accent-600/15 border border-accent-600/25'}">
-                    <div class="text-[9px] text-surface-500 uppercase tracking-widest mb-0.5 font-mono">
-                        ${msg.sender === 'ai' ? 'AI INTERVIEWER' : 'CANDIDATE'}
+                <div class="max-w-[85%] rounded-lg px-4 py-2.5 ${msg.sender === 'ai' ? 'bg-slate-100 border border-slate-200 text-slate-800' : 'bg-slate-950 text-white'}">
+                    <div class="text-[9px] ${msg.sender === 'ai' ? 'text-slate-500' : 'text-slate-300'} uppercase tracking-widest mb-1 font-mono">
+                        ${msg.sender === 'ai' ? 'INTERVIEWER' : 'YOU'}
                     </div>
                     <div class="text-[13px] leading-relaxed">${msg.text}</div>
                 </div>
             </div>`).join('')}
+            
             <div id="typingIndicator" class="flex justify-start hidden">
-                <div class="chat-bubble ai flex gap-1.5 py-3">
-                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
-                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
-                    <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
+                <div class="bg-[#111111] border border-[#222222] rounded-2xl rounded-tl-sm px-4 py-3 flex gap-1.5 items-center">
+                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 0ms"></div>
+                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 150ms"></div>
+                    <div class="w-1.5 h-1.5 bg-[#888888] rounded-full animate-bounce" style="animation-delay: 300ms"></div>
                 </div>
             </div>
         </div>
 
-        <div class="border-t border-surface-800 p-3 bg-surface-900/50">
-            <div class="flex items-center gap-2">
+        <div class="border-t border-slate-200 p-4 bg-slate-50">
+            <div class="flex items-center gap-3">
                 <button onclick="startRecording()" id="micBtn"
-                    class="w-10 h-10 rounded-xl flex items-center justify-center transition-all flex-shrink-0 ${micBtnClass}"
-                    title="Click to speak answer (Web Speech API)">
+                    class="w-10 h-10 rounded-xl flex items-center justify-center transition-colors flex-shrink-0 ${micBtnClass}">
                     ${micIndicator}
                 </button>
-                <input type="text" id="textInput" placeholder="Click microphone to talk, or type your response here..."
-                    class="flex-1 bg-surface-950 border border-surface-800 rounded-xl px-4 py-2.5 text-white placeholder-surface-500 focus:outline-none focus:border-accent-600/50 text-[13px] transition-all"
+                <input type="text" id="textInput" placeholder="Type your response..."
+                    class="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-2.5 text-slate-950 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-[13px] transition-colors"
                     onkeydown="if(event.key==='Enter')submitAnswer()">
                 <button onclick="submitAnswer()"
-                    class="w-10 h-10 rounded-xl bg-accent-600 hover:bg-accent-700 flex items-center justify-center transition-all flex-shrink-0">
-                    <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"/>
-                    </svg>
+                    class="w-10 h-10 rounded-lg bg-slate-950 hover:bg-slate-800 text-white flex items-center justify-center transition-colors flex-shrink-0">
+                    <i data-lucide="send" class="w-4 h-4"></i>
                 </button>
             </div>
-            ${state.isRecording ? `<div class="mt-1.5 text-center"><span class="text-danger-400 text-[10px] font-mono uppercase tracking-widest animate-pulse">Voice recording active — speak your answer</span></div>` : ''}
+            ${state.isRecording ? `<div class="mt-2 text-center"><span class="text-rose-600 text-[10px] font-mono uppercase tracking-widest animate-pulse">Recording audio...</span></div>` : ''}
         </div>
     </div>`;
 }
 
 function _questionInfo(question) {
-    const header = state.isFollowUpActive ? 'LIVE FOLLOW-UP' : 'MAIN QUESTION';
+    const header = state.isFollowUpActive ? 'FOLLOW-UP QUESTION' : 'CURRENT QUESTION';
     const desc = question ? question.text : 'Preparing next question...';
     return `
-    <div class="glass rounded-xl p-4 border border-surface-800">
-        <div class="text-[10px] font-mono uppercase tracking-wider text-accent-400 mb-1.5 font-bold">${header}</div>
-        <div class="text-white text-xs leading-relaxed font-medium">${desc}</div>
+    <div class="interview-panel-light p-5 text-slate-950">
+        <div class="flex items-center gap-2 mb-2">
+            <i data-lucide="help-circle" class="w-4 h-4 text-blue-600"></i>
+            <div class="text-[10px] font-mono uppercase tracking-widest text-slate-500 font-bold">${header}</div>
+        </div>
+        <div class="text-slate-950 text-[13px] leading-relaxed font-semibold">${desc}</div>
     </div>`;
 }
 
@@ -1204,22 +1197,25 @@ function _simulationPanel() {
 function _liveMetrics() {
     const m = state.metrics;
     const bars = [
-        { label: 'Technical Score', value: m.technicalScore,     color: 'accent-600',   id: 'metric-tech', barId: 'bar-tech' },
-        { label: 'Communication',   value: m.communicationScore, color: 'success-500',  id: 'metric-comm', barId: 'bar-comm' },
-        { label: 'Confidence',      value: m.confidenceScore,    color: 'warning-500',  id: 'metric-conf', barId: 'bar-conf' }
+        { label: 'Technical Score', value: m.technicalScore,     id: 'metric-tech', barId: 'bar-tech' },
+        { label: 'Communication',   value: m.communicationScore, id: 'metric-comm', barId: 'bar-comm' },
+        { label: 'Confidence',      value: m.confidenceScore,    id: 'metric-conf', barId: 'bar-conf' }
     ];
     return `
-    <div class="glass rounded-xl p-4 border border-surface-800">
-        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Live Session Metrics</div>
-        <div class="space-y-3.5">
+    <div class="interview-panel-light p-5 text-slate-950">
+        <div class="text-slate-950 text-xs font-bold mb-4 flex items-center gap-2">
+            <i data-lucide="bar-chart-2" class="w-4 h-4 text-emerald-600"></i>
+            Live Performance Metrics
+        </div>
+        <div class="space-y-4">
             ${bars.map(b => `
             <div>
-                <div class="flex justify-between text-[11px] mb-1">
-                    <span class="text-surface-400 font-medium">${b.label}</span>
-                    <span class="text-white font-semibold font-mono" id="${b.id}">${b.value}/10</span>
+                <div class="flex justify-between text-[11px] mb-1.5">
+                    <span class="text-slate-500 font-bold tracking-wide uppercase font-mono">${b.label}</span>
+                    <span class="text-slate-950 font-bold font-mono" id="${b.id}">${b.value}/10</span>
                 </div>
-                <div class="bg-surface-900 rounded-full h-1.5 border border-surface-800">
-                    <div class="bg-${b.color} h-1.5 rounded-full score-fill" id="${b.barId}" style="width:${b.value * 10}%"></div>
+                <div class="bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-emerald-500 h-1.5 rounded-full score-fill transition-all duration-300" id="${b.barId}" style="width:${b.value * 10}%"></div>
                 </div>
             </div>`).join('')}
         </div>
@@ -1232,42 +1228,42 @@ function _ragEvaluatorPanel() {
     let contentHtml = '';
     if (!evalObj) {
         contentHtml = `
-            <div class="text-center py-6 text-surface-500 text-xs italic">
-                Waiting for candidate response to evaluate against Llama 3 RAG Ideal Bank...
+            <div class="text-center py-6 text-slate-500 text-xs font-semibold">
+                Waiting for response to evaluate...
             </div>
         `;
     } else {
         contentHtml = `
-            <div class="space-y-3 mt-1.5 text-xs text-surface-300">
+            <div class="space-y-4 mt-2">
                 <div>
-                    <div class="text-surface-500 text-[9px] uppercase tracking-wider font-mono">Reference RAG Ideal Answer</div>
-                    <div class="text-surface-200 bg-surface-950/80 border border-surface-800 p-2.5 rounded-lg leading-relaxed mt-1 text-[11px] max-h-24 overflow-y-auto">
+                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-1.5">Reference Ideal Answer</div>
+                    <div class="text-slate-700 bg-slate-50 border border-slate-200 p-3 rounded-lg leading-relaxed text-[11px] max-h-24 overflow-y-auto">
                         ${evalObj.idealAnswer}
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-2 text-center">
-                    <div class="bg-surface-950/80 p-2 rounded-lg border border-surface-800">
-                        <div class="text-surface-500 text-[8px] font-mono">CORRECTNESS</div>
-                        <div class="text-accent-400 font-bold font-mono text-sm mt-0.5">${evalObj.correctness}/10</div>
+                <div class="grid grid-cols-3 gap-3 text-center">
+                    <div class="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
+                        <div class="text-blue-700 text-[8px] font-mono uppercase tracking-widest">Correctness</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.correctness}/10</div>
                     </div>
-                    <div class="bg-surface-950/80 p-2 rounded-lg border border-surface-800">
-                        <div class="text-surface-500 text-[8px] font-mono">DEPTH</div>
-                        <div class="text-success-400 font-bold font-mono text-sm mt-0.5">${evalObj.depth}/10</div>
+                    <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
+                        <div class="text-emerald-700 text-[8px] font-mono uppercase tracking-widest">Depth</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.depth}/10</div>
                     </div>
-                    <div class="bg-surface-950/80 p-2 rounded-lg border border-surface-800">
-                        <div class="text-surface-500 text-[8px] font-mono">COMPLETENESS</div>
-                        <div class="text-warning-400 font-bold font-mono text-sm mt-0.5">${evalObj.completeness}/10</div>
+                    <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
+                        <div class="text-amber-700 text-[8px] font-mono uppercase tracking-widest">Completeness</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.completeness}/10</div>
                     </div>
                 </div>
                 
                 <div>
-                    <div class="text-surface-500 text-[9px] uppercase tracking-wider font-mono">Dynamic Concept Alignment</div>
-                    <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Concept Alignment</div>
+                    <div class="flex flex-wrap gap-2">
                         ${evalObj.conceptsMentioned.map(c => `
-                            <span class="bg-success-500/10 text-success-400 border border-success-500/20 text-[9px] px-2 py-0.5 rounded-full font-medium">✓ ${c}</span>
+                            <span class="bg-emerald-600 text-white text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">✓ ${c}</span>
                         `).join('')}
                         ${evalObj.missingConcepts.map(c => `
-                            <span class="bg-danger-500/10 text-danger-400 border border-danger-500/20 text-[9px] px-2 py-0.5 rounded-full font-medium">✗ Missing: ${c}</span>
+                            <span class="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">Missing: ${c}</span>
                         `).join('')}
                     </div>
                 </div>
@@ -1276,10 +1272,10 @@ function _ragEvaluatorPanel() {
     }
 
     return `
-    <div class="glass rounded-xl p-4 border border-surface-800 bg-surface-900/10">
-        <div class="text-white text-xs font-semibold mb-2 uppercase tracking-wider font-mono flex items-center justify-between">
-            <span>RAG Evaluator Agent Logs</span>
-            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono animate-pulse">Llama 3 (Groq)</span>
+    <div class="interview-panel-light p-5 text-slate-950">
+        <div class="text-slate-950 text-xs font-bold mb-3 flex items-center justify-between">
+            <span class="flex items-center gap-2"><i data-lucide="check-square" class="w-4 h-4 text-blue-600"></i> Answer Evaluation</span>
+            <span class="text-[9px] bg-blue-50 text-blue-700 px-2 py-1 rounded-md border border-blue-100 font-mono uppercase tracking-widest">Real-time</span>
         </div>
         ${contentHtml}
     </div>`;
@@ -1287,15 +1283,17 @@ function _ragEvaluatorPanel() {
 
 function _warningsPanel() {
     return `
-    <div class="glass rounded-xl p-4 border border-surface-800">
-        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Cheating Alerts</div>
+    <div class="interview-panel-light p-5 text-slate-950">
+        <div class="text-slate-950 text-xs font-bold mb-3 flex items-center gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 text-amber-600"></i> Integrity Alerts
+        </div>
         <div id="warningsList" class="space-y-2 max-h-32 overflow-y-auto">
             ${state.warnings.length === 0
-                ? `<div class="text-surface-600 text-xs italic">No active anomalies flagged</div>`
+                ? `<div class="text-slate-500 text-xs font-semibold">No anomalies flagged</div>`
                 : state.warnings.map(w => `
-                    <div class="flex items-start gap-1.5 text-[11px] leading-tight text-warning-400 bg-warning-500/5 border border-warning-500/10 rounded px-2 py-1 fade-in">
-                        <span class="mt-0.5 flex-shrink-0">⚠️</span>
-                        <span>${w}</span>
+                    <div class="flex items-start gap-2 text-[11px] leading-tight text-[#ef4444] bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-md px-3 py-2 fade-in">
+                        <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0 mt-px"></i>
+                        <span class="font-medium">${w}</span>
                     </div>`).join('')
             }
         </div>
@@ -1304,45 +1302,47 @@ function _warningsPanel() {
 
 function _agentStatusPanel() {
     const agents = [
-        { label: 'AI Dialogue Interviewer', key: 'questionGenerator' },
-        { label: 'RAG Answer Evaluator', key: 'technicalEvaluator' },
+        { label: 'Interviewer', key: 'questionGenerator' },
+        { label: 'Answer Evaluator', key: 'technicalEvaluator' },
         { label: 'Speech & Comm Analyzer', key: 'communicationEvaluator' },
-        { label: 'CV Face Mesh Monitor', key: 'faceMonitor' }
+        { label: 'Face Monitor', key: 'faceMonitor' }
     ];
     return `
-    <div class="glass rounded-xl p-4 border border-surface-800">
-        <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Running Agent Tasks</div>
-        <div class="space-y-2">
+    <div class="interview-panel-light p-5 text-slate-950">
+        <div class="text-slate-950 text-xs font-bold mb-4 flex items-center gap-2">
+            <i data-lucide="activity" class="w-4 h-4 text-emerald-600"></i> System Tasks
+        </div>
+        <div class="space-y-3">
             ${agents.map(a => {
                 const status = state.agentStatus[a.key] || 'idle';
-                let indicatorColor = 'bg-surface-600';
-                let textClass = 'text-surface-500';
+                let indicatorColor = 'bg-[#333333]';
+                let textClass = 'text-[#666666]';
                 let statusLabel = 'Idle';
                 
                 if (status === 'running' || status === 'tracking' || status === 'monitoring') {
-                    indicatorColor = 'bg-success-500';
-                    textClass = 'text-success-400';
+                    indicatorColor = 'bg-green-500';
+                    textClass = 'text-emerald-600';
                     statusLabel = 'Monitoring';
                 } else if (status === 'analyzing' || status === 'generating') {
-                    indicatorColor = 'bg-accent-500 animate-ping';
-                    textClass = 'text-accent-400 font-bold';
+                    indicatorColor = 'bg-blue-500 animate-pulse';
+                    textClass = 'text-blue-600 font-medium';
                     statusLabel = 'Processing';
                 } else if (status === 'waiting') {
-                    indicatorColor = 'bg-yellow-500';
-                    textClass = 'text-yellow-400';
+                    indicatorColor = 'bg-amber-500';
+                    textClass = 'text-amber-600';
                     statusLabel = 'Awaiting Answer';
                 } else if (status === 'complete') {
-                    indicatorColor = 'bg-success-600';
-                    textClass = 'text-success-500';
+                    indicatorColor = 'bg-slate-400';
+                    textClass = 'text-slate-500';
                     statusLabel = 'Active';
                 }
                 
                 return `
                 <div class="flex items-center justify-between">
-                    <span class="text-surface-400 text-xs">${a.label}</span>
-                    <span class="flex items-center gap-1.5">
+                    <span class="text-slate-600 text-xs font-semibold">${a.label}</span>
+                    <span class="flex items-center gap-2">
                         <span class="w-1.5 h-1.5 ${indicatorColor} rounded-full"></span>
-                        <span class="${textClass} text-[10px] font-mono uppercase tracking-wider">${statusLabel}</span>
+                        <span class="${textClass} text-[10px] font-mono uppercase tracking-widest">${statusLabel}</span>
                     </span>
                 </div>`;
             }).join('')}

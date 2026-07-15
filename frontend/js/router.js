@@ -17,4 +17,9 @@ function render() {
         case 8: renderAdmin();           break;
         default: renderLanding();
     }
+    
+    // Initialize Lucide icons if loaded
+    if (window.lucide) {
+        lucide.createIcons();
+    }
 }

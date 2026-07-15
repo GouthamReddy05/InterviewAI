@@ -4,87 +4,91 @@
 
 function renderUpload() {
     app.innerHTML = `
-    <div class="min-h-screen bg-surface-950">
+    <div class="ia-page font-sans selection:bg-blue-200/60 pb-16">
         <!-- Progress Bar -->
-        <div class="fixed top-0 w-full z-40 bg-surface-950/90 backdrop-blur-sm border-b border-surface-800">
-            <div class="max-w-3xl mx-auto px-4 py-4">
-                <div class="flex items-center justify-between mb-2">
+        <div class="fixed top-0 w-full z-40 ia-topbar">
+            <div class="max-w-5xl mx-auto px-4 py-4">
+                <div class="flex items-center justify-between mb-3">
                     <div class="flex items-center gap-3">
-                        <button onclick="state.step=0;render()" class="text-surface-400 hover:text-white transition-colors">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-                            </svg>
+                        <button onclick="state.step=0;render()" class="text-slate-500 hover:text-slate-950 transition-colors">
+                            <i data-lucide="arrow-left" class="w-4 h-4"></i>
                         </button>
-                        <span class="text-white text-sm font-medium">Setup Interview</span>
+                        <span class="text-slate-950 text-sm font-semibold tracking-tight">Setup Interview</span>
                     </div>
-                    <span class="text-surface-500 text-xs">Step 1 of 5</span>
+                    <span class="text-slate-500 text-xs font-mono">Step 1 of 5</span>
                 </div>
-                <div class="w-full bg-surface-800 rounded-full h-1.5">
-                    <div class="bg-accent-600 h-1.5 rounded-full transition-all duration-500" style="width:20%"></div>
+                <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-blue-600 h-1.5 rounded-full transition-all duration-500" style="width:20%"></div>
                 </div>
             </div>
         </div>
  
-        <div class="max-w-2xl mx-auto px-4 pt-24 pb-16">
-            <h1 class="text-2xl font-bold text-white mb-2">Set up your interview</h1>
-            <p class="text-surface-400 text-sm mb-8">Upload your resume or pick a quick start sample to begin immediately.</p>
+        <div class="max-w-5xl mx-auto px-4 pt-28">
+            <div class="grid lg:grid-cols-[0.85fr_1.15fr] gap-6 items-start">
+            <aside class="ia-card p-6">
+                <div class="ia-chip mb-5"><i data-lucide="route" class="w-3.5 h-3.5 text-blue-600"></i> Practice roadmap</div>
+                <h1 class="text-3xl font-bold text-slate-950 mb-3 tracking-tight">Configure session</h1>
+                <p class="text-slate-600 text-sm leading-6 mb-6">Upload your resume and choose a target role. The next screen extracts skills and generates tailored questions.</p>
+                <div class="space-y-3">
+                    ${['Resume upload', 'Profile analysis', 'Interview setup', 'Live session', 'Report review'].map((item, i) => `
+                        <div class="flex items-center gap-3 ${i === 0 ? 'text-slate-950' : 'text-slate-500'}">
+                            <span class="w-7 h-7 rounded-lg ${i === 0 ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'} flex items-center justify-center text-xs font-bold">${i + 1}</span>
+                            <span class="text-sm font-semibold">${item}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            </aside>
+
+            <section class="ia-card p-6 sm:p-8">
 
             <!-- Name -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-surface-300 mb-2">Your Name</label>
+            <div class="mb-8">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Candidate Name</label>
                 <input type="text" id="nameInput" placeholder="e.g., Goutham" value="${state.candidateName}"
-                    class="w-full bg-surface-900 border border-surface-700 rounded-lg px-4 py-3 text-white placeholder-surface-500
-                           focus:outline-none focus:border-accent-600 focus:ring-1 focus:ring-accent-600 transition-all text-sm"
+                    class="ia-input w-full px-4 py-2.5 text-sm placeholder:text-slate-400"
                     onchange="state.candidateName=this.value">
             </div>
 
             <!-- Resume Upload -->
-            <div class="mb-6">
-                <label class="block text-sm font-medium text-surface-300 mb-2">Upload Resume PDF</label>
+            <div class="mb-8">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Resume Document</label>
                 <div id="dropZone" onclick="document.getElementById('fileInput').click()"
-                    class="border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all
-                           ${state.resumeFile ? 'border-accent-600/50 bg-surface-900/30' : 'border-surface-700 hover:border-accent-600/50 hover:bg-surface-900/50'}">
-                    <input type="file" id="fileInput" accept=".pdf,.doc,.docx" onchange="handleFileUpload(this)">
+                    class="border border-dashed rounded-lg p-8 text-center cursor-pointer transition-all
+                           ${state.resumeFile ? 'border-blue-300 bg-blue-50' : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/70'}">
+                    <input type="file" id="fileInput" accept=".pdf,.doc,.docx" onchange="handleFileUpload(this)" class="hidden">
                     <div id="uploadContent">
                         ${state.resumeFile ? `
-                            <div class="flex items-center justify-center gap-3">
-                                <div class="w-10 h-10 bg-accent-600/20 rounded-lg flex items-center justify-center">
-                                    <svg class="w-5 h-5 text-accent-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                                    </svg>
+                            <div class="flex items-center justify-center gap-4">
+                                <div class="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center">
+                                    <i data-lucide="file-text" class="w-5 h-5"></i>
                                 </div>
                                 <div class="text-left">
-                                    <div class="text-white text-sm font-medium">${state.resumeFileName}</div>
-                                    <div class="text-surface-500 text-xs">Click to change file</div>
+                                    <div class="text-slate-950 text-sm font-semibold">${state.resumeFileName}</div>
+                                    <div class="text-slate-500 text-xs mt-1">Click to replace file</div>
                                 </div>
                             </div>
                         ` : `
-                            <div class="w-10 h-10 bg-surface-800 rounded-lg flex items-center justify-center mx-auto mb-3">
-                                <svg class="w-5 h-5 text-surface-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-                                </svg>
+                            <div class="w-12 h-12 bg-white rounded-lg border border-slate-200 flex items-center justify-center mx-auto mb-4 shadow-sm">
+                                <i data-lucide="upload-cloud" class="w-5 h-5 text-blue-600"></i>
                             </div>
-                            <div class="text-white text-sm font-medium mb-1">Drop your resume here or click to browse</div>
-                            <div class="text-surface-500 text-xs">PDF, DOC, or DOCX (max 5MB)</div>
+                            <div class="text-slate-950 text-sm font-semibold mb-1">Click to upload or drag and drop</div>
+                            <div class="text-slate-500 text-xs">PDF, DOCX (max 5MB)</div>
                         `}
                     </div>
                 </div>
             </div>
 
-
-
             <!-- Job Role -->
-            <div class="mb-10">
-                <label class="block text-sm font-medium text-surface-300 mb-3">Job Role</label>
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div class="mb-12">
+                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Target Role</label>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     ${state.jobRoles.map(role => `
                     <button onclick="selectJobRole('${role}')"
-                        class="p-2.5 rounded-lg border text-center transition-all text-xs
+                        class="p-3 rounded-lg border text-center transition-all text-xs font-semibold
                                ${state.jobRole === role
-                                   ? 'border-accent-600 bg-accent-600/10 text-white font-medium'
-                                   : 'border-surface-700 bg-surface-900/50 text-surface-300 hover:border-surface-600 hover:bg-surface-800/50'}">
-                        <div>${role}</div>
+                                   ? 'border-blue-600 bg-blue-600 text-white'
+                                   : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-slate-950'}">
+                        ${role}
                     </button>
                     `).join('')}
                 </div>
@@ -92,13 +96,15 @@ function renderUpload() {
 
             <!-- Continue -->
             <button onclick="startAnalysis()" id="continueBtn"
-                class="w-full py-3.5 rounded-xl font-medium transition-all text-white
+                class="w-full py-3.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2
                        ${(!state.resumeFile || !state.jobRole)
-                           ? 'bg-surface-800 text-surface-600 cursor-not-allowed'
-                           : 'bg-accent-600 hover:bg-accent-700 hover:shadow-lg hover:shadow-accent-600/20'}"
+                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200'
+                           : 'ia-button-primary'}"
                 ${(!state.resumeFile || !state.jobRole) ? 'disabled' : ''}>
-                Continue
+                Continue <i data-lucide="arrow-right" class="w-4 h-4"></i>
             </button>
+            </section>
+            </div>
         </div>
     </div>
     `;

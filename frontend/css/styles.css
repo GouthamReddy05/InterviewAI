@@ -2,14 +2,41 @@
    InterviewAI — Global Styles
    ============================================================ */
 
+/* ---------- Design Tokens ---------- */
+html {
+    scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
+
+:root {
+    --ia-ink: #111827;
+    --ia-muted: #667085;
+    --ia-line: #d9e2ec;
+    --ia-canvas: #f6f8fb;
+    --ia-panel: #ffffff;
+    --ia-navy: #12233f;
+    --ia-blue: #2563eb;
+    --ia-green: #10b981;
+    --ia-amber: #f59e0b;
+    --ia-red: #ef4444;
+}
+
 /* ---------- Scrollbar ---------- */
 * {
     scrollbar-width: thin;
-    scrollbar-color: #334155 #0f172a;
+    scrollbar-color: #94a3b8 #eef2f7;
 }
 *::-webkit-scrollbar { width: 6px; }
-*::-webkit-scrollbar-track { background: #0f172a; }
-*::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+*::-webkit-scrollbar-track { background: #eef2f7; }
+*::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
 
 /* ---------- Glassmorphism ---------- */
 .glass {
@@ -145,7 +172,141 @@ input[type="file"] { display: none; }
 }
 
 body {
-    background: radial-gradient(circle at 50% 0%, #0f172a 0%, #020617 100%);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.82), rgba(246,248,251,0.98)),
+        radial-gradient(circle at 20% 0%, rgba(37,99,235,0.12), transparent 30%),
+        radial-gradient(circle at 80% 10%, rgba(16,185,129,0.10), transparent 28%);
     background-attachment: fixed;
     min-height: 100vh;
 }
+
+.ia-page {
+    min-height: 100vh;
+    color: var(--ia-ink);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.88), rgba(246,248,251,0.98)),
+        radial-gradient(circle at 12% 0%, rgba(37,99,235,0.10), transparent 28%),
+        radial-gradient(circle at 90% 12%, rgba(16,185,129,0.10), transparent 28%);
+}
+
+.ia-topbar {
+    background: rgba(255, 255, 255, 0.86);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid rgba(217, 226, 236, 0.9);
+}
+
+.ia-card {
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid var(--ia-line);
+    border-radius: 8px;
+    box-shadow: 0 18px 40px rgba(18, 35, 63, 0.08);
+}
+
+.ia-card-soft {
+    background: rgba(248, 250, 252, 0.9);
+    border: 1px solid #e5edf5;
+    border-radius: 8px;
+}
+
+.ia-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border: 1px solid #d9e2ec;
+    background: #fff;
+    color: #475467;
+    border-radius: 999px;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.ia-button-primary {
+    background: var(--ia-ink);
+    color: #fff;
+    border-radius: 8px;
+    transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+    box-shadow: 0 10px 24px rgba(17, 24, 39, 0.18);
+}
+.ia-button-primary:hover {
+    background: #243047;
+    transform: translateY(-1px);
+}
+
+.ia-button-secondary {
+    background: #fff;
+    color: var(--ia-ink);
+    border: 1px solid var(--ia-line);
+    border-radius: 8px;
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+.ia-button-secondary:hover {
+    background: #f8fafc;
+    border-color: #b8c7d9;
+}
+
+.ia-input {
+    background: #fff;
+    border: 1px solid #cfd8e3;
+    color: var(--ia-ink);
+    border-radius: 8px;
+}
+.ia-input:focus {
+    outline: none;
+    border-color: var(--ia-blue);
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.ia-module-rail {
+    position: relative;
+}
+.ia-module-rail::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    background: linear-gradient(180deg, var(--ia-blue), var(--ia-green));
+    border-radius: 8px 0 0 8px;
+}
+
+/* ---------- Interview workspace ---------- */
+.interview-shell {
+    background:
+        radial-gradient(circle at 12% 0%, rgba(37, 99, 235, .16), transparent 25%),
+        radial-gradient(circle at 90% 10%, rgba(16, 185, 129, .1), transparent 22%),
+        #080d18;
+}
+.interview-panel {
+    background: rgba(15, 23, 42, .76);
+    border: 1px solid rgba(148, 163, 184, .16);
+    border-radius: 14px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .24);
+}
+.interview-panel-light {
+    background: rgba(248, 250, 252, .98);
+    border: 1px solid rgba(148, 163, 184, .22);
+    border-radius: 14px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, .2);
+}
+.setup-option {
+    min-height: 158px;
+    transition: transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+.setup-option:hover { transform: translateY(-2px); }
+.setup-option.is-selected { box-shadow: 0 0 0 1px rgba(96, 165, 250, .35), 0 16px 34px rgba(37, 99, 235, .14); }
+.nav-link { position: relative; }
+.nav-link::after {
+    content: "";
+    position: absolute;
+    left: .75rem;
+    right: .75rem;
+    bottom: .18rem;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform .2s ease;
+}
+.nav-link:hover::after, .nav-link.is-active::after { transform: scaleX(1); }
