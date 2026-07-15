@@ -4,15 +4,13 @@ Question Generation and Interview Logic
 
 import json
 import os
+import sys
 from typing import List, Optional
 import uuid
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
-from langchain.chat_models import init_chat_model
-import sys
 from langchain_groq import ChatGroq
 from langchain_classic.memory import ConversationBufferMemory
-from requests import session
 
 # Load environment variables from .env file
 load_dotenv()
@@ -31,8 +29,9 @@ from models.schemas import (
 from services.prompts import (
     QUESTION_GENERATION_PROMPT,
     FOLLOWUP_QUESTION_PROMPT,
-    ANSWER_EVALUATION_PROMPT
+    ANSWER_EVALUATION_PROMPT,
 )
+from core.redis_session_store import RedisSessionStore
 
 
 class InterviewQuestionGenerator:
@@ -248,7 +247,8 @@ class InterviewSessionManager:
     
     def __init__(self):
         """Initialize session storage (in-memory for now, can be replaced with database)"""
-        self.sessions: dict = {}
+        # Use Redis to persist sessions across processes
+        self.session_store = RedisSessionStore()
         self.generator = InterviewQuestionGenerator()
     
     def create_session(
@@ -273,14 +273,14 @@ class InterviewSessionManager:
             memory=ConversationBufferMemory(return_messages=False)
         )
         
-        # Store session
-        self.sessions[session_id] = session
+        # Store session for later retrieval
+        self.session_store.set(session_id, session)
         
         return session
     
     def get_session(self, session_id: str) -> Optional[InterviewSession]:
         """Retrieve a session"""
-        return self.sessions.get(session_id)
+        return self.session_store.get(session_id)
     
     def get_current_question(self, session_id: str) -> Optional[InterviewQuestion]:
         """Get current question in the session"""

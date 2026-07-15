@@ -1,37 +1,33 @@
-"""
-Configuration for InterviewAI
-"""
-
 import os
-# from typing import Optional
+from .settings import settings
 
-# OpenAI Configuration
+# OpenAI Configuration (unchanged, read directly from env)
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")  # or "gpt-4o"
 OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
 
-# Number of questions to generate per category
+# Number of questions to generate per category (unchanged)
 QUESTIONS_PER_SKILL = 4
 QUESTIONS_PER_PROJECT = 4
 QUESTIONS_PER_EXPERIENCE = 4
 QUESTIONS_PER_ACHIEVEMENT = 4
 
-# Interview Configuration
+# Interview Configuration (unchanged)
 MAX_SESSION_DURATION_HOURS = 2
 UPLOAD_FOLDER = "uploads"
 MAX_UPLOAD_SIZE_MB = 50
 
-# LLM Retry Configuration
+# LLM Retry Configuration (unchanged)
 LLM_MAX_RETRIES = 3
 LLM_TIMEOUT_SECONDS = 60
 
-# Database Configuration
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://neondb_owner:npg_SZoulv6e7kfQ@ep-still-moon-ahliiwwj-pooler.c-3.us-east-1.aws.neon.tech/neondb?sslmode=require")
+# Database Configuration – now sourced from Settings
+DATABASE_URL = settings.database_url
 
-# JWT Configuration
-SECRET_KEY = os.getenv("SECRET_KEY", "supersecretjwtkey_1234567890")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 7 days
+# JWT Configuration – now sourced from Settings
+SECRET_KEY = settings.jwt_secret_key.get_secret_value()
+ALGORITHM = settings.jwt_algorithm
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.access_token_expire_minutes
 
-# Logging Configuration
+# Logging Configuration (unchanged)
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
