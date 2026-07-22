@@ -1,15 +1,13 @@
-/* ============================================================
-   InterviewAI — State Management  (js/state.js)
-   ============================================================ */
+
 
 const state = {
-    step: 0, // 0:landing 1:upload 2:analysis 3:setup 4:interview 5:results
+    step: 0,
     sessionId: null,
     resumeFile: null,
     resumeFileName: '',
     jobRole: '',
     candidateName: '',
-    difficulty: 'medium', // easy, medium, hard
+    difficulty: 'medium',
     skills: [],
     projects: [],
     experience: '',
@@ -48,29 +46,29 @@ const state = {
     transcript: '',
     cheatingAlerts: [],
     typing: false,
-    
-    // Cheating statistics
+
+
     cheatingStats: {
         lookedAwayCount: 0,
         multipleFacesCount: 0,
         mobileDetectedCount: 0,
         secondsLookedAway: 0
     },
-    
-    // Simulation triggers
+
+
     simulations: {
         lookAway: false,
         noFace: false,
         multipleFaces: false,
         phoneUsage: false
     },
-    
-    // RAG Technical Evaluator details
-    lastEvaluation: null, // Stores evaluation of last answered question
-    evaluations: []       // Stores history of all evaluations
+
+
+    lastEvaluation: null,
+    evaluations: []
 };
 
-/** Reset all mutable fields for a fresh interview without reloading the page. */
+
 function resetState() {
     state.step = 0;
     state.sessionId = null;

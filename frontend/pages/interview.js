@@ -1,6 +1,4 @@
-/* ============================================================
-   InterviewAI — Active Interview Page  (pages/interview.js)
-   ============================================================ */
+
 
 let recognition = null;
 let faceMesh = null;
@@ -11,7 +9,7 @@ let lookAwaySeconds = 0;
 let silenceSeconds = 0;
 let recordingStartTime = 0;
 
-/* -------- Entry point -------- */
+
 
 async function startInterview() {
     try {
@@ -20,7 +18,7 @@ async function startInterview() {
         console.warn('Camera access denied or unavailable, simulating video feed');
         state.stream = null;
     }
-    
+
     state.step            = 4;
     state.interviewActive = true;
     state.currentQuestion = 0;
@@ -32,13 +30,13 @@ async function startInterview() {
     state.evaluations     = [];
     state.cheatingStats   = { lookedAwayCount: 0, multipleFacesCount: 0, mobileDetectedCount: 0, secondsLookedAway: 0 };
     state.simulations     = { lookAway: false, noFace: false, multipleFaces: false, phoneUsage: false };
-    
+
     render();
     initSpeechRecognition();
     startInterviewFlow();
     startRealtimeSimulation();
-    
-    // Bind Real MediaPipe Face Mesh if camera stream exists
+
+
     setTimeout(() => {
         if (state.stream) {
             initMediaPipe();
@@ -48,15 +46,15 @@ async function startInterview() {
     }, 500);
 }
 
-/* -------- MediaPipe CV Camera Integration -------- */
+
 
 function initMediaPipe() {
     const video = document.getElementById('webcam');
     const canvas = document.getElementById('cvCanvas');
     if (!video || !canvas) return;
-    
+
     const ctx = canvas.getContext('2d');
-    
+
     function resizeCanvas() {
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width;
@@ -81,12 +79,12 @@ function initMediaPipe() {
 
         faceMesh.onResults((results) => {
             if (!state.interviewActive) return;
-            
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const w = canvas.width;
             const h = canvas.height;
 
-            // A. Check for Face Absence
+
             if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
                 if (!state.simulations.noFace) {
                     state.simulations.noFace = true;
@@ -97,18 +95,18 @@ function initMediaPipe() {
                         showTopBanner('FACE NOT DETECTED');
                     }
                 }
-                
+
                 ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
                 ctx.fillRect(0, 0, w, h);
                 return;
             }
 
             state.simulations.noFace = false;
-            // Clear the immediate warning if they return
+
             state.warnings = state.warnings.filter(w => !w.includes('Face missing'));
             updateWarningsList();
 
-            // B. Check for Multiple People (Cheating Detection)
+
             if (results.multiFaceLandmarks.length > 1) {
                 if (!state.simulations.multipleFaces) {
                     state.simulations.multipleFaces = true;
@@ -126,11 +124,11 @@ function initMediaPipe() {
                 updateWarningsList();
             }
 
-            // Loop and draw landmarks for detected faces
+
             for (let fIdx = 0; fIdx < results.multiFaceLandmarks.length; fIdx++) {
                 const landmarks = results.multiFaceLandmarks[fIdx];
-                
-                // Find face bounding rect
+
+
                 let minX = 1, maxX = 0, minY = 1, maxY = 0;
                 landmarks.forEach(pt => {
                     if (pt.x < minX) minX = pt.x;
@@ -138,23 +136,23 @@ function initMediaPipe() {
                     if (pt.y < minY) minY = pt.y;
                     if (pt.y > maxY) maxY = pt.y;
                 });
-                
+
                 const bX = minX * w;
                 const bY = minY * h;
                 const bW = (maxX - minX) * w;
                 const bH = (maxY - minY) * h;
 
-                // Gaze tracking logic for the main candidate (face index 0)
+
                 if (fIdx === 0 && landmarks.length > 473) {
-                    const iris = landmarks[468]; // left iris center
-                    const outerCorner = landmarks[33]; // left eye outer
-                    const innerCorner = landmarks[133]; // left eye inner
-                    
+                    const iris = landmarks[468];
+                    const outerCorner = landmarks[33];
+                    const innerCorner = landmarks[133];
+
                     if (iris && outerCorner && innerCorner) {
                         const eyeWidth = Math.abs(outerCorner.x - innerCorner.x);
                         const irisRatio = Math.abs(iris.x - outerCorner.x) / eyeWidth;
-                        
-                        // Deviances outside center range represent looking far left/right
+
+
                         if (irisRatio < 0.30 || irisRatio > 0.70) {
                             state.simulations.lookAway = true;
                         } else {
@@ -163,44 +161,44 @@ function initMediaPipe() {
                     }
                 }
 
-                // Decide coloring based on status
-                let borderCol = '#22c55e'; // default green
+
+                let borderCol = '#22c55e';
                 let tagText = `FACE TRACKED (CONF: ${Math.round((landmarks[0].z + 1.2) * 100)}%)`;
-                
+
                 if (fIdx === 0 && state.simulations.lookAway) {
-                    borderCol = '#eab308'; // yellow look-away
+                    borderCol = '#eab308';
                     tagText = 'WARNING: LOOKING AWAY';
                 }
                 if (fIdx > 0) {
-                    borderCol = '#ef4444'; // red cheat alert
+                    borderCol = '#ef4444';
                     tagText = 'WARNING: MULTIPLE FACES DETECTED';
                 }
 
-                // Draw bounding box
+
                 ctx.strokeStyle = borderCol;
                 ctx.lineWidth = 1.5;
                 ctx.strokeRect(bX - 5, bY - 5, bW + 10, bH + 10);
-                
-                // Premium label background
+
+
                 ctx.fillStyle = borderCol;
                 const textWidth = ctx.measureText(tagText).width;
                 ctx.fillRect(bX - 5, bY - 20, textWidth + 10, 15);
-                
-                ctx.fillStyle = '#111'; // Dark text for contrast
+
+                ctx.fillStyle = '#111';
                 ctx.font = 'bold 9px monospace';
                 ctx.textAlign = 'left';
                 ctx.fillText(tagText, bX, bY - 10);
 
-                // Draw specific facial landmarks (lips, eyes, outline)
+
                 ctx.fillStyle = fIdx > 0 ? 'rgba(239, 68, 68, 0.4)' : 'rgba(51, 163, 255, 0.5)';
                 const indices = [
                     10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152, 148, 176, 149, 150, 136, 172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
-                    33, 160, 158, 133, 153, 144, 468, // Left eye + iris
-                    362, 385, 387, 263, 373, 380, 473, // Right eye + iris
-                    1, 2, 98, 327, // Nose
-                    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308 // Lips
+                    33, 160, 158, 133, 153, 144, 468,
+                    362, 385, 387, 263, 373, 380, 473,
+                    1, 2, 98, 327,
+                    78, 95, 88, 178, 87, 14, 317, 402, 318, 324, 308
                 ];
-                
+
                 indices.forEach(idx => {
                     const pt = landmarks[idx];
                     if (pt) {
@@ -210,12 +208,12 @@ function initMediaPipe() {
                     }
                 });
 
-                // Draw gaze vector line extending from left eye iris
+
                 if (fIdx === 0 && landmarks[468]) {
                     const lIris = landmarks[468];
                     const lx = lIris.x * w;
                     const ly = lIris.y * h;
-                    
+
                     ctx.strokeStyle = state.simulations.lookAway ? '#ef4444' : '#22c55e';
                     ctx.lineWidth = 1.2;
                     ctx.beginPath();
@@ -229,29 +227,29 @@ function initMediaPipe() {
                 }
             }
 
-            // Draw YOLO Phone Bounding box overlay if simulated
+
             if (state.simulations.phoneUsage) {
                 ctx.strokeStyle = '#ef4444';
                 ctx.lineWidth = 2;
                 const px = w - 100;
                 const py = h - 110;
                 ctx.strokeRect(px, py, 50, 80);
-                
+
                 ctx.fillStyle = '#ef4444';
                 ctx.font = 'bold 8px monospace';
                 ctx.fillText('YOLOv8: CELL PHONE DETECTED', px, py - 4);
-                
+
                 ctx.fillStyle = 'rgba(239, 68, 68, 0.15)';
                 ctx.fillRect(px, py, 50, 80);
             }
         });
 
-        // Initialize Camera utility
+
         cameraInstance = new Camera(video, {
             onFrame: async () => {
                 if (!state.interviewActive) return;
-                
-                // Run FaceMesh (runs fast, optimized for 30fps)
+
+
                 if (faceMesh) {
                     await faceMesh.send({ image: video });
                 }
@@ -259,7 +257,7 @@ function initMediaPipe() {
             width: 640,
             height: 480
         });
-        
+
         cameraInstance.start().catch(err => {
             console.warn("Camera frame capture throw. Falling back to offline mesh simulator.", err);
             startCvCanvas();
@@ -270,7 +268,7 @@ function initMediaPipe() {
     }
 }
 
-/* -------- Speech Recognition -------- */
+
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -281,23 +279,23 @@ function initSpeechRecognition() {
         console.warn('Web Speech API is not supported in this browser. Falling back to typing.');
         return;
     }
-    
+
     recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-    
+
     recognition.onstart = () => {
-        // state.isRecording = true; handled by startRecording
+
         recordingStartTime = Date.now();
         state.transcript = '';
         render();
     };
-    
+
     recognition.onresult = (event) => {
         let interimTranscript = '';
         let finalTranscript = '';
-        
+
         for (let i = event.resultIndex; i < event.results.length; ++i) {
             if (event.results[i].isFinal) {
                 finalTranscript += event.results[i][0].transcript;
@@ -305,27 +303,27 @@ function initSpeechRecognition() {
                 interimTranscript += event.results[i][0].transcript;
             }
         }
-        
+
         const fullTranscript = (state.transcript + ' ' + finalTranscript + ' ' + interimTranscript).trim();
-        
-        // Show in text input
+
+
         const input = document.getElementById('textInput');
         if (input) {
             input.value = fullTranscript;
         }
-        
-        // Count filler words live
+
+
         let words = fullTranscript.toLowerCase().split(/\s+/);
         let fillerCount = 0;
         words.forEach(w => {
             if (FILLER_WORDS.includes(w) || w === 'um' || w === 'ah') fillerCount++;
         });
-        
+
         state.metrics.fillerWords = fillerCount;
         const liveFillers = document.getElementById('liveFillerWords');
         if (liveFillers) liveFillers.textContent = fillerCount;
-        
-        // Calculate WPM live
+
+
         const durationSec = (Date.now() - recordingStartTime) / 1000;
         if (durationSec > 2) {
             const wpm = Math.round((words.length / durationSec) * 60);
@@ -334,7 +332,7 @@ function initSpeechRecognition() {
             if (liveWPM) liveWPM.textContent = wpm;
         }
     };
-    
+
     recognition.onerror = (event) => {
         console.error('Speech recognition error', event.error);
         if (event.error === 'not-allowed') {
@@ -342,7 +340,7 @@ function initSpeechRecognition() {
             stopRecording();
         }
     };
-    
+
     recognition.onend = () => {
         if (state.isRecording && recognition) {
             try { recognition.start(); } catch(e) {}
@@ -355,16 +353,16 @@ async function startRecording() {
         await stopRecording();
         return;
     }
-    
-    // Mute any active AI speech output when recording starts
+
+
     if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
     }
-    
+
     if (recognition) {
         try { recognition.start(); } catch(e) { console.error('Failed to start recognition', e); }
     }
-    
+
     if (state.stream) {
         audioChunks = [];
         mediaRecorder = new MediaRecorder(state.stream);
@@ -384,20 +382,20 @@ function stopRecording() {
             resolve();
             return;
         }
-        
+
         state.isRecording = false;
-        
+
         if (recognition) {
             try { recognition.stop(); } catch(e) {}
         }
-        
+
         if (mediaRecorder && mediaRecorder.state !== 'inactive') {
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const input = document.getElementById('textInput');
                 if (input) input.placeholder = "Transcribing with Whisper...";
                 render();
-                
+
                 try {
                     const response = await API.transcribeAudio(audioBlob);
                     if (response.status === 'success' && response.transcription && response.transcription.text) {
@@ -407,7 +405,7 @@ function stopRecording() {
                 } catch (err) {
                     console.error("Backend transcription failed", err);
                 }
-                
+
                 if (input) input.placeholder = "Type your answer or use microphone...";
                 render();
                 resolve();
@@ -424,20 +422,20 @@ function stopRecording() {
     });
 }
 
-/* -------- Renderer -------- */
+
 
 function renderActiveInterview() {
     const name     = state.candidateName || 'Candidate';
     const question = state.questions[state.currentQuestion];
     const totalQ   = state.questions.length;
-    
-    const progressText = state.isFollowUpActive 
-        ? `Follow-up to Q${state.currentQuestion + 1}` 
+
+    const progressText = state.isFollowUpActive
+        ? `Follow-up to Q${state.currentQuestion + 1}`
         : `Q${state.currentQuestion + 1} of ${totalQ}`;
 
     app.innerHTML = `
     <div class="min-h-screen bg-surface-950 text-surface-200 font-sans selection:bg-blue-300/30">
-        <!-- Top Bar -->
+
         <div class="fixed top-0 w-full z-40 bg-slate-950/88 backdrop-blur-md border-b border-white/10">
             <div class="max-w-7xl mx-auto px-4 py-3">
                 <div class="flex items-center justify-between">
@@ -466,13 +464,13 @@ function renderActiveInterview() {
         <div class="max-w-7xl mx-auto px-4 pt-20 pb-8">
             <div class="grid lg:grid-cols-3 gap-6">
 
-                <!-- Left Column (Video HUD & Chat) -->
+
                 <div class="lg:col-span-2 space-y-6">
                     ${_cameraPanel()}
                     ${_chatPanel(question)}
                 </div>
 
-                <!-- Right Column (Simulator Panels & Logs) -->
+
                 <div class="space-y-6">
                     ${_questionInfo(question)}
                     ${_simulationPanel()}
@@ -494,20 +492,20 @@ function renderActiveInterview() {
     }
 }
 
-/* -------- Fallback Computer Vision Drawer -------- */
+
 
 function startCvCanvas() {
     const canvas = document.getElementById('cvCanvas');
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    
+
     function resizeCanvas() {
         const rect = canvas.getBoundingClientRect();
         canvas.width = rect.width;
         canvas.height = rect.height;
     }
     resizeCanvas();
-    
+
     const baseKeypoints = [];
     for (let i = 0; i < 40; i++) {
         baseKeypoints.push({
@@ -519,7 +517,7 @@ function startCvCanvas() {
     function draw() {
         if (!state.interviewActive) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
+
         const w = canvas.width;
         const h = canvas.height;
 
@@ -538,11 +536,11 @@ function startCvCanvas() {
         const driftY = Math.cos(Date.now() / 600) * 5;
         let faceCenterX = w / 2 + driftX;
         let faceCenterY = h / 2 + 15 + driftY;
-        
+
         let isLookedAway = state.simulations.lookAway;
         let boxColor = isLookedAway ? '#eab308' : '#22c55e';
         let boxText = isLookedAway ? 'WARNING: LOOKING AWAY' : 'FACE TRACKED (98.4%)';
-        
+
         if (isLookedAway) faceCenterX -= 40;
 
         ctx.strokeStyle = boxColor;
@@ -550,12 +548,12 @@ function startCvCanvas() {
         const boxW = 120;
         const boxH = 150;
         ctx.strokeRect(faceCenterX - boxW/2, faceCenterY - boxH/2, boxW, boxH);
-        
+
         ctx.fillStyle = boxColor;
         ctx.font = 'bold 8px monospace';
         ctx.fillText(boxText, faceCenterX - boxW/2 + 2, faceCenterY - boxH/2 - 5);
 
-        // Draw points
+
         ctx.fillStyle = isLookedAway ? 'rgba(234, 179, 8, 0.6)' : 'rgba(51, 163, 255, 0.7)';
         baseKeypoints.forEach(pt => {
             const px = faceCenterX + (pt.x - 0.5) * boxW;
@@ -567,11 +565,11 @@ function startCvCanvas() {
 
         cvAnimationId = requestAnimationFrame(draw);
     }
-    
+
     cvAnimationId = requestAnimationFrame(draw);
 }
 
-/* -------- Realtime Simulations (1s ticker) -------- */
+
 
 let frameAnalysisInterval = null;
 
@@ -586,13 +584,13 @@ function startRealtimeSimulation() {
             lookAwaySeconds++;
             state.cheatingStats.secondsLookedAway++;
             state.metrics.eyeContactScore = Math.max(1.0, (state.metrics.eyeContactScore - 0.7).toFixed(1));
-            
+
             if (lookAwaySeconds >= 3) {
                 const warningMsg = 'Looking away detected for >3 seconds. Please maintain eye contact.';
                 if (!state.warnings.includes(warningMsg)) {
                     state.warnings.unshift(warningMsg);
                     state.cheatingStats.lookedAwayCount++;
-                    
+
                     const banner = document.getElementById('cheatingWarning');
                     if (banner) {
                         banner.textContent = `⚠️ Please maintain eye contact with the camera`;
@@ -630,14 +628,14 @@ function startRealtimeSimulation() {
 
         const liveEye = document.getElementById('liveEyeContact');
         if (liveEye) liveEye.textContent = `${Math.round(state.metrics.eyeContactScore * 10)}%`;
-        
-        // Dynamic emotion changes
+
+
         if (state.isRecording) {
             state.metrics.emotion = state.metrics.fillerWords > 3 ? 'Nervous' : 'Confident';
         } else {
             state.metrics.emotion = 'Neutral';
         }
-        
+
         const emotionLabel = document.getElementById('emotionLabel');
         if (emotionLabel) emotionLabel.textContent = state.metrics.emotion;
 
@@ -645,13 +643,11 @@ function startRealtimeSimulation() {
 
     }, 1000);
 
-    // Start periodic frame analysis (every 2 seconds)
+
     startFrameAnalysis();
 }
 
-/**
- * Periodic frame analysis from video element
- */
+
 function startFrameAnalysis() {
     frameAnalysisInterval = setInterval(async () => {
         if (!state.interviewActive) {
@@ -663,7 +659,7 @@ function startFrameAnalysis() {
         if (!video || !video.srcObject) return;
 
         try {
-            // Shrink the image to 320x240 to drastically speed up network & backend inference
+
             const offscreenCanvas = document.createElement('canvas');
             offscreenCanvas.width = 320;
             offscreenCanvas.height = 240;
@@ -672,18 +668,18 @@ function startFrameAnalysis() {
 
             const frameBlob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/jpeg', 0.6));
             if (frameBlob) {
-                // Send to backend for YOLO analysis
+
                 const result = await API.analyzeFrame(frameBlob);
-                
+
                     const faceAnalysis = result.face_analysis;
                     const objectAnalysis = result.object_analysis;
-                    
-                    // Fallback to backend Face Analysis if frontend Mesh failed
+
+
                     if (faceAnalysis && faceAnalysis.status !== 'skipped') {
                         if (faceAnalysis.looking_away) {
                             state.simulations.lookAway = true;
                         }
-                        
+
                         if (faceAnalysis.status === 'no_face') {
                             if (!state.simulations.noFace) {
                                 state.simulations.noFace = true;
@@ -705,7 +701,7 @@ function startFrameAnalysis() {
                                 }
                             }
                         } else {
-                            // Reset backend triggers if face is good
+
                             state.simulations.noFace = false;
                             state.simulations.multipleFaces = false;
                             state.warnings = state.warnings.filter(w => !w.includes('Face missing') && !w.includes('Multiple people'));
@@ -715,12 +711,12 @@ function startFrameAnalysis() {
 
                     if (objectAnalysis) {
                         state.simulations.phoneUsage = objectAnalysis.phone_detected || false;
-                        
-                        // Handle new suspicious objects
+
+
                         const newObjects = objectAnalysis.prohibited_objects || [];
                         const oldObjects = state.simulations.prohibitedObjects || [];
-                        
-                        // Add warnings for newly detected objects
+
+
                         newObjects.forEach(obj => {
                             const warningMsg = `Suspicious object: ${obj.toUpperCase()}`;
                             if (!state.warnings.includes(warningMsg)) {
@@ -728,15 +724,15 @@ function startFrameAnalysis() {
                                 showTopBanner(warningMsg);
                             }
                         });
-                        
-                        // Remove warnings for objects that are no longer in frame
+
+
                         oldObjects.forEach(obj => {
                             if (!newObjects.includes(obj)) {
                                 const warningMsg = `Suspicious object: ${obj.toUpperCase()}`;
                                 state.warnings = state.warnings.filter(w => w !== warningMsg);
                             }
                         });
-                        
+
                         state.simulations.prohibitedObjects = newObjects;
                         updateWarningsList();
                     }
@@ -744,7 +740,7 @@ function startFrameAnalysis() {
         } catch (error) {
             console.debug('Optimized frame analysis failed:', error);
         }
-    }, 3000); // Super fast 3000ms interval for near real-time detection without overloading
+    }, 3000);
 }
 
 function showTopBanner(text) {
@@ -768,12 +764,12 @@ function toggleSimulation(type, isChecked) {
 function updateWarningsList() {
     const list = document.getElementById('warningsList');
     if (!list) return;
-    
+
     if (state.warnings.length === 0) {
         list.innerHTML = `<div class="text-surface-600 text-[10px] italic">No active warnings</div>`;
         return;
     }
-    
+
     list.innerHTML = state.warnings.map(w => `
         <div class="flex items-start gap-1.5 text-[11px] leading-tight text-warning-400 bg-warning-500/5 border border-warning-500/10 rounded px-2 py-1 fade-in">
             <span class="mt-0.5 flex-shrink-0">⚠️</span>
@@ -787,7 +783,7 @@ function updateHUDMetrics() {
     const commEl = document.getElementById('metric-comm');
     const confEl = document.getElementById('metric-conf');
     const eyeEl = document.getElementById('metric-eye');
-    
+
     if (techEl) techEl.textContent = `${state.metrics.technicalScore}/10`;
     if (commEl) commEl.textContent = `${state.metrics.communicationScore}/10`;
     if (confEl) confEl.textContent = `${state.metrics.confidenceScore}/10`;
@@ -804,7 +800,7 @@ function _setBarWidth(id, percent) {
     if (bar) bar.style.width = `${percent}%`;
 }
 
-/* -------- Interview Flow -------- */
+
 
 function startInterviewFlow() {
     state.agentStatus.technicalEvaluator = 'waiting';
@@ -819,19 +815,19 @@ function startInterviewFlow() {
 
 async function speakText(text) {
     if ('speechSynthesis' in window) {
-        // Cancel current speech synthesis to avoid queuing overlap
+
         window.speechSynthesis.cancel();
     }
-    
-    // Clean text of emojis and special bold markdown markers
+
+
     let cleanText = text.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '');
     cleanText = cleanText.replace(/\*\*/g, '').trim();
-    
+
     try {
         const response = await API.generateSpeech(cleanText);
         if (response.status === 'success' && response.audio) {
             playAudioFromBase64(response.audio);
-            return; // Successfully played with ElevenLabs
+            return;
         }
     } catch (err) {
         console.error("ElevenLabs TTS via backend failed, falling back to Web Speech", err);
@@ -841,8 +837,8 @@ async function speakText(text) {
         const utterance = new SpeechSynthesisUtterance(cleanText);
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
-        
-        // Pick a professional English voice
+
+
         const voices = window.speechSynthesis.getVoices();
         const voice = voices.find(v => v.lang.startsWith('en') && v.name.includes('Google')) ||
                       voices.find(v => v.lang.startsWith('en')) ||
@@ -850,19 +846,19 @@ async function speakText(text) {
         if (voice) {
             utterance.voice = voice;
         }
-        
+
         window.speechSynthesis.speak(utterance);
     }
 }
 
 function addMessage(sender, text) {
     state.chatMessages.push({ sender, text });
-    
-    // Trigger voice output for AI responses
+
+
     if (sender === 'ai') {
         speakText(text);
     }
-    
+
     const chat = document.getElementById('chatContainer');
     if (!chat) return;
 
@@ -883,28 +879,28 @@ function addMessage(sender, text) {
     chat.scrollTop = chat.scrollHeight;
 }
 
-/* -------- Answer Submission & LLM Evaluation -------- */
+
 
 async function submitAnswer() {
     if (state.isRecording) {
         await stopRecording();
     }
-    
+
     const input = document.getElementById('textInput');
     let answerText = '';
-    
+
     if (input && input.value.trim()) {
         answerText = input.value.trim();
         input.value = '';
     } else if (state.transcript) {
         answerText = state.transcript;
     }
-    
+
     if (!answerText) return;
-    
+
     state.transcript = '';
     addMessage('user', answerText);
-    
+
     state.answers.push(answerText);
     processAnswer(answerText);
 }
@@ -917,13 +913,13 @@ async function processAnswer(userAnswer) {
 
     const currentQ = state.questions[state.currentQuestion];
 
-    // Activate Evaluator status
+
     state.agentStatus.technicalEvaluator = 'analyzing';
-    
+
     try {
         const response = await API.submitAnswer(state.sessionId, userAnswer);
         if (response.status !== 'success') throw new Error("Backend submission failed");
-        
+
         let evaluation = response.evaluation;
         const ev = {
             question: currentQ.text,
@@ -933,25 +929,25 @@ async function processAnswer(userAnswer) {
         };
         state.lastEvaluation = ev;
         state.evaluations.push(ev);
-        
-        // Update global average metrics
+
+
         state.metrics.technicalScore = Math.min(10.0, parseFloat(((state.metrics.technicalScore * (state.evaluations.length - 1) + ev.score) / state.evaluations.length).toFixed(1)));
-        
-        // Comm and Confidence evaluation logic
+
+
         const wordCount = userAnswer.split(/\s+/).length;
         const recordedWPM = state.metrics.speakingSpeed || 140;
         state.metrics.speakingSpeed = Math.round((state.metrics.speakingSpeed + recordedWPM) / 2);
-        
+
         let commScore = 9.5;
         if (state.metrics.fillerWords > 7) commScore -= 2.0;
         if (wordCount < 15) commScore -= 1.5;
         state.metrics.communicationScore = Math.min(10.0, parseFloat(((state.metrics.communicationScore * (state.evaluations.length - 1) + commScore) / state.evaluations.length).toFixed(1)));
-        
+
         let confScore = 9.8;
         if (state.metrics.fillerWords > 5) confScore -= 1.5;
         if (state.simulations.lookAway) confScore -= 2.0;
         state.metrics.confidenceScore = Math.min(10.0, parseFloat(((state.metrics.confidenceScore * (state.evaluations.length - 1) + confScore) / state.evaluations.length).toFixed(1)));
-        
+
         state.agentStatus.technicalEvaluator = 'idle';
         renderActiveInterview();
 
@@ -986,7 +982,7 @@ async function processAnswer(userAnswer) {
                 }
             }, 1500);
         }
-        
+
     } catch (e) {
         console.error("Backend evaluation failed", e);
         state.agentStatus.technicalEvaluator = 'idle';
@@ -995,25 +991,23 @@ async function processAnswer(userAnswer) {
     }
 }
 
-/**
- * Offline evaluation fallback
- */
+
 function evaluateAnswerAgainstIdeal(candidateAnswer, questionObj) {
     const text = candidateAnswer.toLowerCase();
     const concepts = questionObj.concepts || [];
     const mentioned = concepts.filter(c => text.includes(c.toLowerCase()));
     const missing = concepts.filter(c => !mentioned.includes(c));
-    
+
     let completeness = 3.0;
     if (concepts.length > 0) {
         completeness = Math.round((mentioned.length / concepts.length) * 10);
     }
-    
+
     const words = candidateAnswer.split(/\s+/).length;
     let depth = words > 50 ? 9.0 : words > 25 ? 7.5 : 5.0;
     let correctness = mentioned.length > 0 ? 5.0 + (mentioned.length / concepts.length) * 4.5 : 4.0;
     const score = Math.round(((correctness + depth + completeness) / 3) * 10) / 10;
-    
+
     return {
         question: questionObj.text,
         candidateAnswer,
@@ -1028,19 +1022,19 @@ function evaluateAnswerAgainstIdeal(candidateAnswer, questionObj) {
     };
 }
 
-/* -------- End Interview -------- */
+
 
 function endInterview() {
     if (state.stream) {
         state.stream.getTracks().forEach(track => track.stop());
         state.stream = null;
     }
-    
+
     if (cvAnimationId) cancelAnimationFrame(cvAnimationId);
     if (cheatCheckInterval) clearInterval(cheatCheckInterval);
     if (frameAnalysisInterval) clearInterval(frameAnalysisInterval);
-    
-    // Close MediaPipe instances if they exist
+
+
     if (cameraInstance) {
         try { cameraInstance.stop(); } catch(e) {}
         cameraInstance = null;
@@ -1049,20 +1043,20 @@ function endInterview() {
         try { faceMesh.close(); } catch(e) {}
         faceMesh = null;
     }
-    
+
     state.interviewActive = false;
-    
+
     state.agentStatus.technicalEvaluator = 'complete';
     state.agentStatus.communicationEvaluator = 'complete';
     state.agentStatus.faceMonitor = 'complete';
     state.agentStatus.feedbackGenerator = 'complete';
     state.agentStatus.reportGenerator = 'complete';
-    
+
     state.step = 5;
     render();
 }
 
-/* -------- HTML Partials -------- */
+
 
 function _cameraPanel() {
     return `
@@ -1081,19 +1075,19 @@ function _cameraPanel() {
             </div>
         `}
         <canvas id="cvCanvas" class="absolute top-0 left-0 w-full h-full pointer-events-none z-10"></canvas>
-        
+
         <div class="absolute top-3 left-3 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md rounded-full px-3 py-1.5 border border-white/10 z-20">
             <span class="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
             <span class="text-[9px] font-mono text-white tracking-widest uppercase">Feed Active</span>
         </div>
-        
+
         <div class="absolute top-3 right-3 z-20">
             <div class="bg-surface-950/80 backdrop-blur-sm rounded-lg px-3 py-2 border border-surface-800 text-[10px] font-mono">
                 <span class="text-surface-500">Session:</span>
                 <span class="text-accent-400 ml-2 font-semibold">${(state.currentQuestion || 0) + 1} of ${state.questions?.length || 6}</span>
             </div>
         </div>
-        
+
         <div id="cheatingWarning" class="absolute inset-0 bg-[#ef4444]/10 backdrop-blur-md hidden flex-col items-center justify-center z-[100] transition-all duration-300">
             <div class="absolute inset-0 border-2 border-[#ef4444]/50 animate-pulse"></div>
             <div class="bg-slate-950 border border-rose-400/50 p-6 rounded-lg flex flex-col items-center shadow-2xl">
@@ -1109,8 +1103,8 @@ function _cameraPanel() {
 }
 
 function _chatPanel(question) {
-    const micBtnClass = state.isRecording 
-        ? 'bg-rose-500 hover:bg-rose-600 text-white' 
+    const micBtnClass = state.isRecording
+        ? 'bg-rose-500 hover:bg-rose-600 text-white'
         : 'bg-blue-500 hover:bg-blue-600 text-white';
 
     const micIndicator = state.isRecording
@@ -1141,7 +1135,7 @@ function _chatPanel(question) {
                     <div class="text-[13px] leading-relaxed">${msg.text}</div>
                 </div>
             </div>`).join('')}
-            
+
             <div id="typingIndicator" class="flex justify-start hidden">
                 <div class="chat-bubble ai flex gap-1.5 py-3">
                     <div class="w-1.5 h-1.5 bg-surface-500 rounded-full typing-dot"></div>
@@ -1183,7 +1177,7 @@ function _questionInfo(question) {
 }
 
 function _simulationPanel() {
-    return ''; // Removed - Integrity Simulator no longer needed
+    return '';
 }
 
 function _liveMetrics() {
@@ -1215,7 +1209,7 @@ function _liveMetrics() {
 
 function _ragEvaluatorPanel() {
     const evalObj = state.lastEvaluation;
-    
+
     let contentHtml = '';
     if (!evalObj) {
         contentHtml = `
@@ -1246,7 +1240,7 @@ function _ragEvaluatorPanel() {
                         <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.completeness}/10</div>
                     </div>
                 </div>
-                
+
                 <div>
                     <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Concept Alignment</div>
                     <div class="flex flex-wrap gap-2">
@@ -1307,7 +1301,7 @@ function _agentStatusPanel() {
                 let indicatorColor = 'bg-[#333333]';
                 let textClass = 'text-[#666666]';
                 let statusLabel = 'Idle';
-                
+
                 if (status === 'running' || status === 'tracking' || status === 'monitoring') {
                     indicatorColor = 'bg-green-500';
                     textClass = 'text-emerald-600';
@@ -1325,7 +1319,7 @@ function _agentStatusPanel() {
                     textClass = 'text-slate-500';
                     statusLabel = 'Active';
                 }
-                
+
                 return `
                 <div class="flex items-center justify-between">
                     <span class="text-slate-600 text-xs font-semibold">${a.label}</span>

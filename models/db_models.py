@@ -13,22 +13,22 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # Relationship to interviews
+
     interviews = relationship("InterviewSessionModel", back_populates="user")
 
 class InterviewSessionModel(Base):
     __tablename__ = "interviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String, unique=True, index=True, nullable=False) # Maps to in-memory session_id
+    session_id = Column(String, unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"))
     resume_name = Column(String)
     job_role = Column(String)
     status = Column(String, default="in_progress")
-    score = Column(Float, nullable=True) # Overall score once completed
+    score = Column(Float, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
-    # Optional: store full report JSON when completed
+
+
     report_data = Column(JSON, nullable=True)
 
     user = relationship("User", back_populates="interviews")

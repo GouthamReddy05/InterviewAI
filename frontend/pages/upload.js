@@ -1,11 +1,9 @@
-/* ============================================================
-   InterviewAI — Upload Page  (pages/upload.js)
-   ============================================================ */
+
 
 function renderUpload() {
     app.innerHTML = `
     <div class="ia-page font-sans selection:bg-blue-200/60 pb-16">
-        <!-- Progress Bar -->
+
         <div class="fixed top-0 w-full z-40 ia-topbar">
             <div class="max-w-5xl mx-auto px-4 py-4">
                 <div class="flex items-center justify-between mb-3">
@@ -22,7 +20,7 @@ function renderUpload() {
                 </div>
             </div>
         </div>
- 
+
         <div class="max-w-5xl mx-auto px-4 pt-28">
             <div class="grid lg:grid-cols-[0.85fr_1.15fr] gap-6 items-start">
             <aside class="ia-card p-6">
@@ -41,7 +39,7 @@ function renderUpload() {
 
             <section class="ia-card p-6 sm:p-8">
 
-            <!-- Name -->
+
             <div class="mb-8">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Candidate Name</label>
                 <input type="text" id="nameInput" placeholder="e.g., Goutham" value="${state.candidateName}"
@@ -49,7 +47,7 @@ function renderUpload() {
                     onchange="state.candidateName=this.value">
             </div>
 
-            <!-- Resume Upload -->
+
             <div class="mb-8">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Resume Document</label>
                 <div id="dropZone" onclick="document.getElementById('fileInput').click()"
@@ -78,7 +76,7 @@ function renderUpload() {
                 </div>
             </div>
 
-            <!-- Job Role -->
+
             <div class="mb-12">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Target Role</label>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -94,7 +92,7 @@ function renderUpload() {
                 </div>
             </div>
 
-            <!-- Continue -->
+
             <button onclick="startAnalysis()" id="continueBtn"
                 class="w-full py-3.5 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2
                        ${(!state.resumeFile || !state.jobRole)
@@ -112,15 +110,15 @@ function renderUpload() {
     _attachDropZone();
 }
 
-/* ---- event handlers ---- */
+
 
 async function handleFileUpload(input) {
     if (input.files.length) {
         const file = input.files[0];
         state.resumeFile     = file;
         state.resumeFileName = file.name;
-        
-        // Auto extract name from filename if empty
+
+
         if (!state.candidateName) {
             let base = state.resumeFileName.split('.')[0];
             base = base.replace(/[-_]/g, ' ');
@@ -129,13 +127,13 @@ async function handleFileUpload(input) {
                 state.candidateName = base.charAt(0).toUpperCase() + base.slice(1);
             }
         }
-        
-        // Reset sample caches
+
+
         state.tempExtracted = null;
         state.resumeRawText = "Extracting text from PDF...";
         renderUpload();
-        
-        // Extract raw text asynchronously in the background
+
+
         try {
             state.resumeRawText = await extractTextFromPDF(file);
             console.log("PDF parsed successfully. Characters:", state.resumeRawText.length);
@@ -143,7 +141,7 @@ async function handleFileUpload(input) {
             console.error("PDF parsing error", e);
             state.resumeRawText = `Resume PDF: ${state.resumeFileName}. Candidate: ${state.candidateName}.`;
         }
-        
+
         renderUpload();
     }
 }
@@ -153,9 +151,7 @@ function selectJobRole(role) {
     renderUpload();
 }
 
-/**
- * Upload resume to backend to create interview session
- */
+
 async function uploadResumeToBackend() {
     try {
         const formData = new FormData();
@@ -164,15 +160,15 @@ async function uploadResumeToBackend() {
         if (state.resumeRawText) {
             formData.append('resume_text', state.resumeRawText);
         }
-        
+
         const response = await API.uploadResume(formData);
-        
+
         if (response.status === 'success') {
-            // Store session ID
+
             state.sessionId = response.session_id;
             state.totalQuestions = response.total_questions;
-            
-            // Load all questions from backend
+
+
             if (response.questions && response.questions.length > 0) {
                 state.questions = response.questions.map((q, idx) => ({
                     id: idx + 1,
@@ -185,16 +181,16 @@ async function uploadResumeToBackend() {
                     ideal: `Context: ${q.context}`,
                     concepts: []
                 }));
-                
-                // Use explicitly extracted profile from LLM
+
+
                 const profile = response.extracted_profile || {};
                 state.skills = profile.skills || [];
                 state.projects = profile.projects || [];
-                
+
                 const exp = profile.experience || [];
                 state.experience = exp.length > 0 ? exp.join(', ') : 'Professional Experience';
             }
-            
+
             console.log('Resume uploaded successfully, session created:', state.sessionId);
             console.log('Loaded questions:', state.questions.length);
         } else {
@@ -209,9 +205,9 @@ function loadSampleResume(name, role, skills, projects, experience) {
     state.candidateName = name;
     state.jobRole = role;
     state.resumeFileName = `${name}_Resume.pdf`;
-    state.resumeFile = { name: state.resumeFileName, size: 124500 }; 
-    
-    // Set matching pre-computed raw text to mimic PDF extraction
+    state.resumeFile = { name: state.resumeFileName, size: 124500 };
+
+
     state.resumeRawText = `
         CANDIDATE: ${name}
         TARGET ROLE: ${role}
@@ -220,22 +216,20 @@ function loadSampleResume(name, role, skills, projects, experience) {
         COMPLETED PROJECTS:
         - ${projects.join('\n        - ')}
     `.trim();
-    
+
     state.tempExtracted = { skills, projects, experience };
     renderUpload();
 }
 
-/**
- * Text Extractor utility using PDF.js
- */
+
 async function extractTextFromPDF(file) {
     const arrayBuffer = await file.arrayBuffer();
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-    
+
     const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
     const pdf = await loadingTask.promise;
     let fullText = '';
-    
+
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
@@ -247,13 +241,13 @@ async function extractTextFromPDF(file) {
 
 function startAnalysis() {
     if (!state.resumeFile || !state.jobRole) return;
-    
+
     state.step = 2;
     render();
     simulateAnalysis();
 }
 
-/* ---- private ---- */
+
 
 function _attachDropZone() {
     const dropZone = document.getElementById('dropZone');

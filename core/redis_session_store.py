@@ -19,10 +19,10 @@ class RedisSessionStore:
             self.client = redis.StrictRedis.from_url(
                 url or settings.redis_url or "redis://localhost:6379/0", decode_responses=True
             )
-            # Test connection
+
             self.client.ping()
         except Exception as e:
-            # Fallback to in-memory dict if Redis cannot be reached
+
             print(f"[WARN] Redis connection failed ({e}); using in-memory session store.")
             self.client = None
             self._memory_store: Dict[str, str] = {}

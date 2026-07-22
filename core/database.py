@@ -2,7 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from core.config import DATABASE_URL
 
-# Create SQLAlchemy engine
+
 try:
     engine = create_engine(DATABASE_URL)
 except Exception as e:
@@ -10,10 +10,10 @@ except Exception as e:
     engine = create_engine('sqlite:///:memory:', echo=False)
 
 
-# Create a sessionmaker
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Base class for models
+
 Base = declarative_base()
 
 def get_db():

@@ -1,8 +1,12 @@
-/* ============================================================
-   InterviewAI — Router  (js/router.js)
-   ============================================================ */
+
 
 const app = document.getElementById('app');
+
+function logoutUser() {
+    localStorage.removeItem('interviewai_token');
+    state.step = 0;
+    render();
+}
 
 function render() {
     switch (state.step) {
@@ -17,8 +21,8 @@ function render() {
         case 8: renderAdmin();           break;
         default: renderLanding();
     }
-    
-    // Initialize Lucide icons if loaded
+
+
     if (window.lucide) {
         lucide.createIcons();
     }

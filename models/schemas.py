@@ -81,7 +81,7 @@ class InterviewSession(BaseModel):
     questions: List[InterviewQuestion]
     current_question_index: int = 0
 
-    # Interview flow - Follow-up tracking
+
     is_followup_mode: bool = False
     current_followup_depth: int = 0
     max_followup_depth: int = 3
@@ -90,11 +90,11 @@ class InterviewSession(BaseModel):
     answers: List[CandidateAnswer] = []
     follow_ups: List[FollowUpQuestion] = []
 
-    # LangChain memory for context-aware follow-ups
+
     memory: Any = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    status: str = "in_progress"  # in_progress, completed
+    status: str = "in_progress"
 
     class Config:
         arbitrary_types_allowed = True
@@ -146,12 +146,12 @@ class InterviewProgressResponse(BaseModel):
 
 class CommunicationAnalysis(BaseModel):
     """Analysis of candidate's communication skills"""
-    speaking_speed_wpm: float  # Words per minute
-    filler_word_count: int  # Um, ah, like, etc.
+    speaking_speed_wpm: float
+    filler_word_count: int
     average_pause_seconds: float
-    confidence_score: float  # 0-100
-    clarity_score: float  # 0-100
-    
+    confidence_score: float
+    clarity_score: float
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -166,13 +166,13 @@ class CommunicationAnalysis(BaseModel):
 
 class FaceAnalysis(BaseModel):
     """Analysis of face and eye contact during interview"""
-    eye_contact_percentage: float  # 0-100
-    face_detected_percentage: float  # 0-100
-    head_position: str  # "centered", "left", "right", "down"
-    emotion: str  # "neutral", "happy", "sad", "angry", "confused"
+    eye_contact_percentage: float
+    face_detected_percentage: float
+    head_position: str
+    emotion: str
     looking_away_incidents: int
     face_missing_incidents: int
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -191,9 +191,9 @@ class CheatingDetectionResult(BaseModel):
     phone_detected: bool
     multiple_faces_detected: bool
     suspicious_behavior_detected: bool
-    cheating_score: float  # 0-100 (higher = more suspicious)
+    cheating_score: float
     flags: List[str] = []
-    
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -208,14 +208,14 @@ class CheatingDetectionResult(BaseModel):
 
 class InterviewMetrics(BaseModel):
     """Complete interview metrics and scoring"""
-    technical_score: float  # 0-100
-    communication_score: float  # 0-100
-    confidence_score: float  # 0-100
-    eye_contact_score: float  # 0-100
-    resume_alignment_score: float  # 0-100
-    problem_solving_score: float  # 0-100
-    overall_score: float  # 0-100
-    
+    technical_score: float
+    communication_score: float
+    confidence_score: float
+    eye_contact_score: float
+    resume_alignment_score: float
+    problem_solving_score: float
+    overall_score: float
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -235,9 +235,9 @@ class ImprovementPlan(BaseModel):
     strengths: List[str]
     weaknesses: List[str]
     recommendations: List[str]
-    focus_areas: List[str]  # Top 3-5 areas to improve
-    resources: List[str] = []  # Optional learning resources
-    
+    focus_areas: List[str]
+    resources: List[str] = []
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -276,21 +276,21 @@ class InterviewReport(BaseModel):
     job_role: str
     questions_answered: int
     total_questions: int
-    
-    # Scores and metrics
+
+
     metrics: InterviewMetrics
     communication_analysis: CommunicationAnalysis
     face_analysis: FaceAnalysis
     cheating_detection: CheatingDetectionResult
-    
-    # Q&A with evaluations
-    q_and_a: List[dict]  # Question, answer, evaluation, follow-up
-    
-    # Recommendations
+
+
+    q_and_a: List[dict]
+
+
     improvement_plan: ImprovementPlan
-    
+
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    
+
     class Config:
         json_schema_extra = {
             "example": {

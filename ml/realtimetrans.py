@@ -8,9 +8,9 @@ import torch
 from faster_whisper import WhisperModel
 from silero_vad import load_silero_vad, get_speech_timestamps
 
-# ==========================
-# Config
-# ==========================
+
+
+
 SAMPLE_RATE = 16000
 BLOCK_DURATION = 0.5
 CHUNK_DURATION = 2
@@ -20,9 +20,9 @@ FRAMES_PER_CHUNK = int(SAMPLE_RATE * CHUNK_DURATION)
 
 SILENCE_TIMEOUT = 7
 
-# ==========================
-# Globals
-# ==========================
+
+
+
 audio_queue = queue.Queue()
 audio_buffer = []
 
@@ -31,9 +31,9 @@ last_speech_time = time.time()
 
 stop_event = threading.Event()
 
-# ==========================
-# Models
-# ==========================
+
+
+
 whisper_model = WhisperModel(
     "small",
     device="cpu",
@@ -42,9 +42,9 @@ whisper_model = WhisperModel(
 
 vad_model = load_silero_vad()
 
-# ==========================
-# Callback
-# ==========================
+
+
+
 def audio_callback(indata, frames, callback_time, status):
 
     if status:
@@ -52,9 +52,9 @@ def audio_callback(indata, frames, callback_time, status):
 
     audio_queue.put(indata.copy())
 
-# ==========================
-# Recorder
-# ==========================
+
+
+
 def recorder():
 
     with sd.InputStream(
@@ -69,9 +69,9 @@ def recorder():
         while not stop_event.is_set():
             sd.sleep(100)
 
-# ==========================
-# Transcriber
-# ==========================
+
+
+
 def transcriber():
 
     global audio_buffer
@@ -93,9 +93,9 @@ def transcriber():
 
         audio_data = audio_data.flatten().astype(np.float32)
 
-        # ----------------------
-        # Silero VAD
-        # ----------------------
+
+
+
         speech = get_speech_timestamps(
             torch.from_numpy(audio_data),
             vad_model,
@@ -121,9 +121,9 @@ def transcriber():
 
         last_speech_time = time.time()
 
-        # ----------------------
-        # Whisper
-        # ----------------------
+
+
+
         segments, _ = whisper_model.transcribe(
             audio_data,
             language="en",
@@ -141,9 +141,9 @@ def transcriber():
 
             print("📝", text)
 
-# ==========================
-# Start
-# ==========================
+
+
+
 threading.Thread(
     target=recorder,
     daemon=True
@@ -154,9 +154,9 @@ threading.Thread(
     daemon=True
 ).start()
 
-# ==========================
-# Wait
-# ==========================
+
+
+
 while not stop_event.is_set():
     time.sleep(1)
 

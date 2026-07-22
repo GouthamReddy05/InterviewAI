@@ -2,9 +2,9 @@ import cv2
 import mediapipe as mp
 import time
 
-# ==========================
-# MediaPipe Setup
-# ==========================
+
+
+
 mp_face_mesh = mp.solutions.face_mesh
 
 face_mesh = mp_face_mesh.FaceMesh(
@@ -15,23 +15,23 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5
 )
 
-# ==========================
-# Webcam
-# ==========================
+
+
+
 cap = cv2.VideoCapture(0)
 
-# ==========================
-# Timers
-# ==========================
+
+
+
 last_face_seen = time.time()
 looking_away_start = None
 
 FACE_MISSING_TIME = 2
 LOOK_AWAY_TIME = 2
 
-# ==========================
-# Main Loop
-# ==========================
+
+
+
 while True:
 
     success, frame = cap.read()
@@ -52,9 +52,9 @@ while True:
 
     results = face_mesh.process(rgb)
 
-    # ==================================
-    # FACE NOT DETECTED
-    # ==================================
+
+
+
     if not results.multi_face_landmarks:
 
         if time.time() - last_face_seen > FACE_MISSING_TIME:
@@ -66,9 +66,9 @@ while True:
 
         last_face_seen = time.time()
 
-        # ==================================
-        # MULTIPLE FACES
-        # ==================================
+
+
+
         face_count = len(
             results.multi_face_landmarks
         )
@@ -78,12 +78,12 @@ while True:
                 f"MULTIPLE PERSONS ({face_count})"
             )
 
-        # ==================================
-        # USE FIRST FACE
-        # ==================================
+
+
+
         face = results.multi_face_landmarks[0]
 
-        # Nose and Face Edges
+
         nose_x = face.landmark[1].x
 
         left_face_x = face.landmark[234].x
@@ -101,13 +101,13 @@ while True:
                 left_face_x
             ) / face_width
 
-            # ==========================
-            # HEAD TURN DETECTION
-            # ==========================
-            # Forward ≈ 0.50
-            # Strong Left < 0.25
-            # Strong Right > 0.75
-            # ==========================
+
+
+
+
+
+
+
 
             if ratio < 0.25:
 
@@ -141,9 +141,9 @@ while True:
 
                 looking_away_start = None
 
-    # ==================================
-    # WARNING OVERLAY
-    # ==================================
+
+
+
     if warning_message:
 
         cv2.rectangle(
@@ -164,9 +164,9 @@ while True:
             2
         )
 
-    # ==================================
-    # SHOW CAMERA
-    # ==================================
+
+
+
     cv2.imshow(
         "InterviewAI",
         frame
@@ -174,7 +174,7 @@ while True:
 
     key = cv2.waitKey(1)
 
-    if key == 27:  # ESC
+    if key == 27:
         break
 
 cap.release()

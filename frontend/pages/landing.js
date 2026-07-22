@@ -1,6 +1,4 @@
-/* ============================================================
-   InterviewAI — Landing Page  (pages/landing.js)
-   ============================================================ */
+
 
 function renderLanding() {
     const isAuthed = localStorage.getItem('interviewai_token');
@@ -40,7 +38,7 @@ function renderLanding() {
                     <div class="flex items-center gap-3">
                         ${isAuthed ? `
                             <button onclick="state.step=8;render()" class="ia-button-secondary px-4 py-2 text-sm font-semibold hover:bg-slate-50 transition-colors">Dashboard</button>
-                            <button onclick="localStorage.removeItem('interviewai_token'); window.location.reload();" class="text-sm font-semibold text-slate-500 hover:text-slate-950 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-colors">Logout</button>
+                            <button onclick="logoutUser()" class="text-sm font-semibold text-slate-500 hover:text-slate-950 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-colors">Logout</button>
                         ` : `
                             <button onclick="openAuthModal('login')" class="hidden sm:inline text-sm font-semibold text-slate-500 hover:text-slate-950 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-colors">Log in</button>
                             <button onclick="openAuthModal('signup')" class="ia-button-primary px-4 py-2 text-sm font-semibold flex items-center gap-2 hover:shadow-lg transition-shadow">
@@ -203,7 +201,7 @@ function renderLanding() {
             </section>
         </main>
 
-        <!-- Auth Modal -->
+
         <div id="authModal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle" onclick="if(event.target === this) closeAuthModal()" class="fixed inset-0 z-[100] hidden items-center justify-center bg-slate-900/40 backdrop-blur-sm opacity-0 transition-opacity duration-300 px-4">
             <div onclick="event.stopPropagation()" class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden transform scale-95 transition-transform duration-300">
                 <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100">
@@ -262,7 +260,7 @@ function renderLanding() {
         const toggleText = document.getElementById('authToggleText');
         const toggleButton = document.getElementById('authToggleButton');
         const errorBox = document.getElementById('authErrorBox');
-        
+
         errorBox.classList.add('hidden');
         typeInput.value = type;
 
@@ -311,7 +309,7 @@ function renderLanding() {
     if (window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 
     setTimeout(() => {
-        // Handle auth form submission
+
         const form = document.getElementById('authModalForm');
         if (form) {
             form.addEventListener('submit', async (e) => {
@@ -320,7 +318,7 @@ function renderLanding() {
                 const username = document.getElementById('authUsername').value;
                 const password = document.getElementById('authPassword').value;
                 const errorBox = document.getElementById('authErrorBox');
-                
+
                 try {
                     let response;
                     if (type === 'login') {
@@ -337,7 +335,7 @@ function renderLanding() {
                         });
                     }
                     const data = await response.json();
-                    
+
                     if (response.ok) {
                         localStorage.setItem('interviewai_token', data.access_token);
                         window.location.reload();
@@ -352,10 +350,10 @@ function renderLanding() {
             });
         }
 
-        // Scrollspy for nav links
+
         const sections = document.querySelectorAll('section[id]');
         const navLinks = document.querySelectorAll('.nav-link');
-        
+
         const setActiveNav = (id) => {
             navLinks.forEach(link => {
                 const active = link.getAttribute('href') === '#' + id;
@@ -375,7 +373,7 @@ function renderLanding() {
                 }
             });
         }, { rootMargin: '-20% 0px -60% 0px' });
-        
+
         sections.forEach(section => observer.observe(section));
         window.addEventListener('keydown', (event) => {
             if (event.key === 'Escape' && !document.getElementById('authModal').classList.contains('hidden')) closeAuthModal();

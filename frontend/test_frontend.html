@@ -6,7 +6,7 @@
 <video id="webcam"></video>
 <canvas id="cvCanvas"></canvas>
 <script>
-    // mock DOM
+
     document.getElementById = function(id) {
         if(id === 'app') return document.querySelector('#app');
         if(id === 'webcam') return document.querySelector('#webcam');
@@ -35,8 +35,8 @@
     state.stream = { getTracks: () => [] };
     state.sessionId = "123";
     state.reportData = null;
-    
-    // override fetch
+
+
     window.fetch = async () => {
         return {
             json: async () => ({ status: 'success' })

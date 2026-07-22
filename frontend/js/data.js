@@ -1,13 +1,11 @@
-/* ============================================================
-   InterviewAI — Static Data & RAG Bank  (js/data.js)
-   ============================================================ */
+
 
 const JOB_ROLES = [
     'Data Scientist', 'AI Engineer', 'Full Stack Developer', 'Java Developer',
     'ML Engineer', 'Backend Developer', 'DevOps Engineer', 'Cybersecurity Analyst'
 ];
 
-// Expose on state for backward-compat
+
 state.jobRoles = JOB_ROLES;
 
 const QUESTION_BANK = {
@@ -223,7 +221,7 @@ const QUESTION_BANK = {
             }
         ]
     },
-    // Fallbacks to generic questions for the other roles to ensure same schema robustness
+
     'ML Engineer': {
         easy: [
             {
@@ -443,10 +441,7 @@ const FILLER_WORDS = [
     'you know', 'sort of', 'kind of', 'i mean'
 ];
 
-/**
- * Keyword-to-Followup question mapping.
- * Matches keywords (case-insensitive) in the candidate's response to ask a dynamic follow-up.
- */
+
 const FOLLOWUP_BANK = {
     'smote': [
         'Why choose SMOTE over simple random oversampling? Are there risks of overfitting with SMOTE?',
@@ -510,18 +505,15 @@ const FOLLOWUP_BANK = {
     ]
 };
 
-/**
- * Build the question list for the current state.jobRole and state.difficulty.
- * Writes directly into state.questions.
- */
+
 function generateQuestions() {
     const bank = QUESTION_BANK[state.jobRole] || QUESTION_BANK['Full Stack Developer'];
-    
-    // Choose questions based on difficulty level
+
+
     const diff = state.difficulty || 'medium';
     let selectedQuestions = [];
-    
-    // Attempt to take 2 easy, 2 medium, 2 hard from selected role, fallback to whatever is available
+
+
     if (diff === 'easy') {
         selectedQuestions = [
             ...bank.easy.slice(0, 2),
@@ -534,31 +526,31 @@ function generateQuestions() {
             ...bank.medium.slice(0, 1),
             ...bank.hard.slice(0, 2)
         ];
-    } else { // medium
+    } else {
         selectedQuestions = [
             ...bank.easy.slice(0, 1),
             ...bank.medium.slice(0, 2),
             ...bank.hard.slice(0, 1)
         ];
     }
-    
-    // Format them correctly as objects in state.questions
+
+
     state.questions = selectedQuestions.map(q => ({
         text: q.text,
         ideal: q.ideal,
         concepts: q.concepts
     }));
-    
-    // Append resume-based project and skill questions
+
+
     const primaryProject = state.projects[0] || 'Crop Disease Detection';
     const primarySkill = state.skills[0] || 'Python';
-    
+
     state.questions.push({
         text: `Tell me about your project: ${primaryProject}. What was your architecture and what challenges did you face?`,
         ideal: `The candidate should explain the project's architecture, technologies used like ${primarySkill}, their role, and key challenges solved.`,
         concepts: ['architecture', 'challenges', 'implementation', primaryProject.toLowerCase(), 'technologies']
     });
-    
+
     state.questions.push({
         text: `How would you apply ${primarySkill} in a real-world scenario to optimize performance and solve scaling issues?`,
         ideal: `The candidate should discuss how to use ${primarySkill} best practices, library optimizations, multi-threading/concurrency, and memory management in production.`,

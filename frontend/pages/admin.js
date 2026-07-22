@@ -1,25 +1,24 @@
-/* ============================================================
-   InterviewAI — Admin Dashboard  (pages/admin.js)
-   ============================================================ */
+
 
 function renderAdmin() {
     app.innerHTML = `
     <div class="ia-page font-sans selection:bg-blue-200/60 flex flex-col">
-        <!-- Navbar -->
+
         <nav class="ia-topbar px-6 py-4 flex items-center justify-between sticky top-0 z-50">
             <div class="flex items-center gap-3">
                 <span class="w-9 h-9 rounded-lg bg-slate-950 text-white flex items-center justify-center">
                     <i data-lucide="shield-check" class="w-5 h-5"></i>
                 </span>
                 <h1 class="text-slate-950 font-semibold text-lg tracking-tight">Admin Dashboard</h1>
+                <span id="usernameDisplay" class="text-slate-600 text-sm font-medium"></span>
             </div>
             <div class="flex items-center gap-6">
                 <button onclick="state.step=0;render()" class="text-slate-600 hover:text-slate-950 transition-colors text-sm font-semibold">Home</button>
-                <button id="logoutBtn" class="ia-button-secondary px-4 py-1.5 text-sm font-semibold">Logout</button>
+                <button id="logoutBtn" class="text-sm font-semibold text-slate-500 hover:text-slate-950 hover:bg-slate-100 px-3 py-1.5 rounded-md transition-colors">Logout</button>
             </div>
         </nav>
 
-        <!-- Main Content -->
+
         <div class="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10">
             <div class="mb-8">
                 <div class="ia-chip mb-4"><i data-lucide="database" class="w-3.5 h-3.5 text-blue-600"></i> Operations</div>
@@ -29,11 +28,11 @@ function renderAdmin() {
             <div id="errorBox" class="hidden bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-lg text-sm mb-8 text-center"></div>
 
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- Users Table -->
+
                 <div class="ia-card p-6 relative overflow-hidden">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-slate-950 font-semibold text-lg flex items-center gap-2">
-                            Registered Users 
+                            Registered Users
                             <span id="userCount" class="bg-blue-50 text-blue-700 border border-blue-100 py-0.5 px-2.5 rounded-full text-[10px] uppercase tracking-wider font-mono">0</span>
                         </h2>
                     </div>
@@ -54,11 +53,11 @@ function renderAdmin() {
                     </div>
                 </div>
 
-                <!-- Interviews Table -->
+
                 <div class="ia-card p-6 relative overflow-hidden">
                     <div class="flex items-center justify-between mb-6">
                         <h2 class="text-slate-950 font-semibold text-lg flex items-center gap-2">
-                            Interview Sessions 
+                            Interview Sessions
                             <span id="interviewCount" class="bg-emerald-50 text-emerald-700 border border-emerald-100 py-0.5 px-2.5 rounded-full text-[10px] uppercase tracking-wider font-mono">0</span>
                         </h2>
                     </div>
@@ -87,43 +86,43 @@ function renderAdmin() {
     setTimeout(async () => {
         const token = localStorage.getItem('interviewai_token');
         if (!token) {
-            state.step = 6; // Go to login
+            state.step = 0;
             render();
             return;
         }
 
         document.getElementById('logoutBtn')?.addEventListener('click', () => {
-            localStorage.removeItem('interviewai_token');
-            state.step = 6;
-            render();
+            logoutUser();
         });
 
         try {
             const headers = { 'Authorization': `Bearer ${token}` };
-            
-            // Check if admin
+
+
             const userRes = await fetch('/api/auth/me', { headers });
             if (!userRes.ok) throw new Error('Authentication failed');
             const user = await userRes.json();
-            
+
             if (!user.is_admin) {
                 throw new Error('Access denied. Administrator privileges required.');
             }
-            
-            // Fetch Users
+
+
             const usersRes = await fetch('/api/admin/users', { headers });
             if (usersRes.ok) {
                 const users = await usersRes.json();
-                document.getElementById('userCount').textContent = users.length;
-                
+                if (state.step !== 8) return;
+                const userCount = document.getElementById('userCount');
+                if (userCount) userCount.textContent = users.length;
+
                 const tbody = document.getElementById('usersTableBody');
                 tbody.innerHTML = '';
                 if (users.length === 0) {
                     tbody.innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-slate-500">No users found</td></tr>';
                 }
                 users.forEach(u => {
-                    const roleBadge = u.is_admin 
-                        ? '<span class="bg-slate-950 text-white border border-slate-950 py-1 px-2.5 rounded-md text-[10px] font-semibold tracking-wide">Admin</span>' 
+                    const roleBadge = u.is_admin
+                        ? '<span class="bg-slate-950 text-white border border-slate-950 py-1 px-2.5 rounded-md text-[10px] font-semibold tracking-wide">Admin</span>'
                         : '<span class="bg-slate-100 text-slate-600 border border-slate-200 py-1 px-2.5 rounded-md text-[10px] font-semibold tracking-wide">User</span>';
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition-colors">
@@ -134,13 +133,15 @@ function renderAdmin() {
                         </tr>`;
                 });
             }
-            
-            // Fetch Interviews
+
+
             const interviewsRes = await fetch('/api/admin/interviews', { headers });
             if (interviewsRes.ok) {
                 const interviews = await interviewsRes.json();
-                document.getElementById('interviewCount').textContent = interviews.length;
-                
+                if (state.step !== 8) return;
+                const interviewCount = document.getElementById('interviewCount');
+                if (interviewCount) interviewCount.textContent = interviews.length;
+
                 const tbody = document.getElementById('interviewsTableBody');
                 tbody.innerHTML = '';
                 if (interviews.length === 0) {
@@ -158,13 +159,16 @@ function renderAdmin() {
                         </tr>`;
                 });
             }
-            
+
         } catch (err) {
+            if (state.step !== 8) return;
             const errorBox = document.getElementById('errorBox');
-            errorBox.textContent = err.message || 'Failed to load admin data';
-            errorBox.classList.remove('hidden');
-            document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-rose-600">Error loading data</td></tr>';
-            document.getElementById('interviewsTableBody').innerHTML = '<tr><td colspan="4" class="px-4 py-8 text-center text-rose-600">Error loading data</td></tr>';
+            if (errorBox) {
+                errorBox.textContent = err.message || 'Failed to load admin data';
+                errorBox.classList.remove('hidden');
+            }
+            document.getElementById('usersTableBody')?.replaceChildren();
+            document.getElementById('interviewsTableBody')?.replaceChildren();
         }
     }, 100);
 }

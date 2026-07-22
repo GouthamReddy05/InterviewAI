@@ -1,8 +1,6 @@
-/* ============================================================
-   InterviewAI — Global Styles
-   ============================================================ */
 
-/* ---------- Design Tokens ---------- */
+
+
 html {
     scroll-behavior: smooth;
 }
@@ -29,7 +27,7 @@ html {
     --ia-red: #ef4444;
 }
 
-/* ---------- Scrollbar ---------- */
+
 * {
     scrollbar-width: thin;
     scrollbar-color: #94a3b8 #eef2f7;
@@ -38,7 +36,7 @@ html {
 *::-webkit-scrollbar-track { background: #eef2f7; }
 *::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
 
-/* ---------- Glassmorphism ---------- */
+
 .glass {
     background: rgba(15, 23, 42, 0.65);
     backdrop-filter: blur(16px);
@@ -54,7 +52,7 @@ html {
     box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.15);
 }
 
-/* ---------- Pulse Ring ---------- */
+
 .pulse-ring {
     animation: pulseRing 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
 }
@@ -64,7 +62,7 @@ html {
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(51,163,255,0); }
 }
 
-/* ---------- Typing Indicator ---------- */
+
 .typing-dot { animation: typingDot 1.4s infinite; }
 .typing-dot:nth-child(2) { animation-delay: 0.2s; }
 .typing-dot:nth-child(3) { animation-delay: 0.4s; }
@@ -73,7 +71,7 @@ html {
     30%            { transform: translateY(-4px); opacity: 1; }
 }
 
-/* ---------- Entrance Animations ---------- */
+
 .fade-in { animation: fadeIn 0.4s ease-out; }
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
@@ -86,11 +84,11 @@ html {
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ---------- Score / Metric Bars ---------- */
+
 .score-fill  { transition: width 1.5s cubic-bezier(0.4, 0, 0.2, 1); }
 .metric-bar  { transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1); }
 
-/* ---------- Audio Wave ---------- */
+
 .wave-bar { animation: wave 1.2s ease-in-out infinite; }
 .wave-bar:nth-child(1) { animation-delay: 0s; }
 .wave-bar:nth-child(2) { animation-delay: 0.1s; }
@@ -102,13 +100,13 @@ html {
     50%       { height: 16px; }
 }
 
-/* ---------- Progress Step ---------- */
+
 .progress-step { transition: all 0.3s ease; }
 
-/* ---------- File Input Hidden ---------- */
+
 input[type="file"] { display: none; }
 
-/* ---------- Video / Webcam ---------- */
+
 .video-container {
     position: relative;
     overflow: hidden;
@@ -116,7 +114,7 @@ input[type="file"] { display: none; }
 }
 .video-container video { transform: scaleX(-1); }
 
-/* ---------- Face Overlay ---------- */
+
 .face-overlay {
     position: absolute;
     top: 50%; left: 50%;
@@ -130,7 +128,7 @@ input[type="file"] { display: none; }
 .face-overlay.detecting { border-color: rgba(51,163,255,0.8); }
 .face-overlay.warning   { border-color: rgba(248,113,113,0.8); }
 
-/* ---------- Chat Bubbles ---------- */
+
 .chat-bubble {
     max-width: 80%;
     padding: 12px 16px;
@@ -141,7 +139,7 @@ input[type="file"] { display: none; }
 .chat-bubble.ai   { background: rgba(255,255,255,0.06); border-bottom-left-radius: 4px; }
 .chat-bubble.user { background: rgba(51,163,255,0.15);  border-bottom-right-radius: 4px; }
 
-/* ---------- Tooltip ---------- */
+
 .tooltip { position: relative; }
 .tooltip::after {
     content: attr(data-tip);
@@ -156,14 +154,14 @@ input[type="file"] { display: none; }
 }
 .tooltip:hover::after { opacity: 1; }
 
-/* ---------- Responsive ---------- */
+
 @media (max-width: 768px) {
     .chat-bubble { max-width: 90%; }
 }
 
-/* ---------- Grid Background ---------- */
+
 .bg-grid {
-    background-image: 
+    background-image:
         radial-gradient(rgba(99, 102, 241, 0.15) 1px, transparent 1px),
         radial-gradient(rgba(99, 102, 241, 0.05) 1px, transparent 1px);
     background-size: 32px 32px;
@@ -270,7 +268,7 @@ body {
     border-radius: 8px 0 0 8px;
 }
 
-/* ---------- Interview workspace ---------- */
+
 .interview-shell {
     background:
         radial-gradient(circle at 12% 0%, rgba(37, 99, 235, .16), transparent 25%),

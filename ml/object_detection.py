@@ -1,14 +1,14 @@
 from ultralytics import YOLO
 import cv2
 
-# ==========================
-# Load YOLOv8
-# ==========================
+
+
+
 model = YOLO("yolov8n.pt")
 
-# ==========================
-# Webcam
-# ==========================
+
+
+
 cap = cv2.VideoCapture(0)
 
 while True:
@@ -18,7 +18,7 @@ while True:
     if not ret:
         break
 
-    # Mirror effect
+
     frame = cv2.flip(frame, 1)
 
     warning_message = ""
@@ -26,9 +26,9 @@ while True:
     person_count = 0
     phone_detected = False
 
-    # ==========================
-    # YOLO Detection
-    # ==========================
+
+
+
     results = model(
         frame,
         verbose=False
@@ -46,7 +46,7 @@ while True:
 
             confidence = float(box.conf[0])
 
-            # Ignore weak detections
+
             if confidence < 0.50:
                 continue
 
@@ -55,9 +55,9 @@ while True:
                 box.xyxy[0]
             )
 
-            # ==========================
-            # PERSON
-            # ==========================
+
+
+
             if class_name == "person":
 
                 person_count += 1
@@ -80,9 +80,9 @@ while True:
                     2
                 )
 
-            # ==========================
-            # CELL PHONE
-            # ==========================
+
+
+
             elif class_name == "cell phone":
 
                 phone_detected = True
@@ -105,9 +105,9 @@ while True:
                     2
                 )
 
-    # ==========================
-    # Warning Logic
-    # ==========================
+
+
+
     if person_count > 1:
 
         warning_message = (
@@ -120,9 +120,9 @@ while True:
             "CELL PHONE DETECTED"
         )
 
-    # ==========================
-    # Show Warning
-    # ==========================
+
+
+
     if warning_message:
 
         cv2.rectangle(
@@ -143,9 +143,9 @@ while True:
             2
         )
 
-    # ==========================
-    # Person Counter
-    # ==========================
+
+
+
     cv2.putText(
         frame,
         f"Persons: {person_count}",
@@ -156,9 +156,9 @@ while True:
         2
     )
 
-    # ==========================
-    # Display
-    # ==========================
+
+
+
     cv2.imshow(
         "InterviewAI - YOLO Monitor",
         frame
@@ -166,7 +166,7 @@ while True:
 
     key = cv2.waitKey(1)
 
-    if key == 27:  # ESC
+    if key == 27:
         break
 
 cap.release()

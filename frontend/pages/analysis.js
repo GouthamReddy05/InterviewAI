@@ -1,6 +1,4 @@
-/* ============================================================
-   InterviewAI — Analysis Page  (pages/analysis.js)
-   ============================================================ */
+
 
 function renderAnalysis() {
     const agents = [
@@ -18,7 +16,7 @@ function renderAnalysis() {
             <h2 class="text-2xl font-bold text-slate-950 mb-2 tracking-tight">Processing your profile</h2>
             <p class="text-slate-600 text-sm mb-10">Extracting skills, generating tailored questions, and configuring the interview environment.</p>
 
-            <!-- Agent Progress Boxes -->
+
             <div class="grid sm:grid-cols-3 gap-4 text-left max-w-xl mx-auto mb-10">
                 ${agents.map(agent => `
                 <div class="ia-card p-4 text-left" id="agent-${agent.id}">
@@ -36,7 +34,7 @@ function renderAnalysis() {
                 `).join('')}
             </div>
 
-            <!-- Terminal-style Log Console -->
+
             <div class="max-w-xl mx-auto">
                 <div class="bg-slate-950 border border-slate-800 rounded-lg overflow-hidden shadow-2xl">
                     <div class="bg-slate-900 px-4 py-2 border-b border-slate-800 flex items-center justify-between">
@@ -61,7 +59,7 @@ function renderAnalysis() {
 
 async function simulateAnalysis() {
     const consoleEl = document.getElementById('terminalConsole');
-    
+
     function logMessage(text, type = 'normal') {
         if (!consoleEl) return;
         const line = document.createElement('div');
@@ -96,8 +94,8 @@ async function simulateAnalysis() {
 
     try {
         logMessage(`> [System] Initializing backend processes...`, 'system');
-        
-        // --- STEP 1 & 2: Backend Upload and Generation ---
+
+
         logMessage(`> [Process] Uploading resume and retrieving questions...`);
         updateAgentProgress('resumeAnalyzer', 30, 'Uploading');
         updateAgentProgress('questionGenerator', 30, 'Waiting');
@@ -114,20 +112,20 @@ async function simulateAnalysis() {
             throw new Error("Failed to configure session from backend");
         }
 
-        // --- STEP 3: FACE MONITORING AGENT (MediaPipe CV setup) ---
+
         logMessage(`> [System] Connecting to vision system...`, 'system');
         updateAgentProgress('faceMonitor', 20, 'Connecting');
-        
+
         await new Promise(r => setTimeout(r, 600));
         logMessage(`> [Vision] Loading MediaPipe FaceMesh models...`);
         updateAgentProgress('faceMonitor', 60, 'Loading');
-        
+
         await new Promise(r => setTimeout(r, 800));
         logMessage(`> [Vision] Face Mesh loaded. Camera tracker ready.`, 'success');
         updateAgentProgress('faceMonitor', 100, 'Complete', true);
-        
+
         logMessage(`> [System] Setup complete. Proceeding...`, 'system');
-        
+
         await new Promise(r => setTimeout(r, 1000));
         state.step = 3;
         render();
@@ -135,7 +133,7 @@ async function simulateAnalysis() {
     } catch (globalError) {
         logMessage(`> [System Error] Critical setup failure: ${globalError.message}`, 'error');
         console.error("Critical setup error", globalError);
-        
+
         logMessage(`> [System] HALTING: Connection to server failed.`, 'error');
         alert("Backend API failed. Please ensure the server is running.");
     }

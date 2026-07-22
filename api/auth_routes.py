@@ -22,19 +22,19 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
     db_user = db.query(db_models.User).filter(db_models.User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Username already registered")
-    
+
     db_email = db.query(db_models.User).filter(db_models.User.email == user.email).first()
     if db_email:
         raise HTTPException(status_code=400, detail="Email already registered")
 
     hashed_password = auth.get_password_hash(user.password)
-    # Give admin rights to the first user or based on specific logic. For now, we'll manually or conditionally assign it.
-    # Give admin rights only to the specified user
+
+
     is_admin = True if user.username.lower() == 'goutham' and user.email.lower() == 'codecpp05@gmail.com' else False
 
     new_user = db_models.User(
-        username=user.username, 
-        email=user.email, 
+        username=user.username,
+        email=user.email,
         hashed_password=hashed_password,
         is_admin=is_admin
     )

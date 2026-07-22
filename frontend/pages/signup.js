@@ -1,6 +1,4 @@
-/* ============================================================
-   InterviewAI — Signup Page  (pages/signup.js)
-   ============================================================ */
+
 
 function renderSignup() {
     app.innerHTML = `

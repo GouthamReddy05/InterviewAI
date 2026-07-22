@@ -11,23 +11,23 @@ class Settings(BaseSettings):
     placeholder.
     """
 
-    # Core FastAPI settings
+
     app_name: str = Field(default="InterviewAI", description="Application name")
     environment: str = Field(default="development", description="Running environment (dev / prod)")
     debug: bool = Field(default=True, description="Enable FastAPI debug mode")
 
-    # Database settings
+
     database_url: str = Field(..., env="DATABASE_URL", description="SQLAlchemy connection URL")
 
-    # JWT authentication (optional placeholder for dev)
+
     jwt_secret_key: SecretStr = Field(default=SecretStr("dev-secret"), env="JWT_SECRET_KEY", description="Secret key for signing JWTs")
     jwt_algorithm: str = Field(default="HS256", description="Algorithm for JWT encoding")
     access_token_expire_minutes: int = Field(default=60, description="JWT expiry in minutes")
 
-    # Groq LLM API
+
     groq_api_key: SecretStr = Field(..., env="GROQ_API_KEY", description="Groq API key for LLM calls")
 
-    # Redis (optional – only required if the Redis session store is enabled)
+
     redis_url: Optional[str] = Field(default=None, env="REDIS_URL", description="Redis connection URL, e.g., redis://localhost:6379/0")
 
     model_config = {
@@ -36,5 +36,5 @@ class Settings(BaseSettings):
         "extra": "ignore",
     }
 
-# Export a singleton for easy import throughout the project
+
 settings = Settings()

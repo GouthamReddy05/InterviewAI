@@ -1,6 +1,4 @@
-/* ============================================================
-   InterviewAI — Interview Setup Page  (pages/setup.js)
-   ============================================================ */
+
 
 function renderInterviewSetup() {
     const name = state.candidateName || 'Candidate';
