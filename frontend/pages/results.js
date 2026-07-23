@@ -20,7 +20,13 @@ function renderResults() {
         </div>`;
 
         API.getComprehensiveReport(state.sessionId).then(data => {
-            state.reportData = data;
+            // Backend nests plan under comprehensive_report; keep flat fallback.
+            const report = data && data.comprehensive_report ? data.comprehensive_report : data;
+            state.reportData = Object.assign({}, data || {}, report || {}, {
+                improvement_plan: (report && report.improvement_plan)
+                    || (data && data.improvement_plan)
+                    || { strengths: [], weaknesses: [] }
+            });
 
             let baseScore = (
                 (m.technicalScore * 0.35) +

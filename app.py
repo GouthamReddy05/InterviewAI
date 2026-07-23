@@ -268,6 +268,10 @@ async def submit_answer(session_id: str, request: AnswerSubmissionRequest):
 
         result = session_manager.submit_answer(session_id, request.answer)
 
+        # Re-read session so interview_complete reflects post-submit status.
+        updated = session_manager.get_session(session_id)
+        interview_complete = bool(updated and updated.status == "completed")
+
         return JSONResponse({
             "status": "success",
             "action": result["action"],
@@ -276,7 +280,7 @@ async def submit_answer(session_id: str, request: AnswerSubmissionRequest):
             "followup_depth": result.get("followup_depth", 0),
             "next_question": result.get("next_question"),
             "next_question_available": result.get("next_question_available", False),
-            "interview_complete": session.status == "completed"
+            "interview_complete": interview_complete
         })
 
     except ValueError as e:
@@ -302,23 +306,19 @@ async def next_question(session_id: str):
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
 
-
-        session.is_followup_mode = False
-        session.current_followup_depth = 0
-        session.conversation_history = []
-
         has_next = session_manager.proceed_to_next_question(session_id)
 
         if has_next:
             next_q = session_manager.get_current_question(session_id)
-            question_number = session.current_question_index + 1
+            updated = session_manager.get_session(session_id)
+            question_number = (updated.current_question_index + 1) if updated else 1
 
             return JSONResponse({
                 "status": "success",
                 "interview_complete": False,
                 "next_question": {
                     "question_number": question_number,
-                    "total_questions": len(session.questions),
+                    "total_questions": len(updated.questions) if updated else len(session.questions),
                     "category": next_q.category,
                     "name": next_q.name,
                     "primary_question": next_q.primary_question,
@@ -333,20 +333,6 @@ async def next_question(session_id: str):
                 "next_question": None
             })
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-class EndSessionRequest(BaseModel):
-    score: float
-
-@app.post("/api/session/{session_id}/end")
-async def end_session(session_id: str, request: EndSessionRequest):
-    try:
-        session = session_manager.get_session(session_id)
-        if not session:
-            raise HTTPException(status_code=404, detail="Session not found")
-        session.status = "completed"
-        return JSONResponse({"status": "success", "message": "Session ended"})
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -482,21 +468,35 @@ async def get_comprehensive_report(
 class EndSessionRequest(BaseModel):
     score: float
 
+
 @app.post("/api/session/{session_id}/end")
 async def end_session(
     session_id: str,
     request: EndSessionRequest,
     db: Session = Depends(database.get_db)
 ):
+    """Mark interview completed in Redis session store and Postgres."""
     try:
-        db_interview = db.query(db_models.InterviewSessionModel).filter(db_models.InterviewSessionModel.session_id == session_id).first()
+        session = session_manager.get_session(session_id)
+        if session:
+            session.status = "completed"
+            session_manager.session_store.set(session_id, session)
+
+        db_interview = db.query(db_models.InterviewSessionModel).filter(
+            db_models.InterviewSessionModel.session_id == session_id
+        ).first()
         if db_interview:
             db_interview.status = "completed"
             db_interview.score = request.score
             db.commit()
             return {"status": "success"}
-        else:
-            raise HTTPException(status_code=404, detail="Interview not found")
+
+        if session:
+            return {"status": "success", "message": "Session ended (no DB row)"}
+
+        raise HTTPException(status_code=404, detail="Interview not found")
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

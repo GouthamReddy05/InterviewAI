@@ -5,12 +5,11 @@ Question Generation and Interview Logic
 import json
 import os
 import sys
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import uuid
 from dotenv import load_dotenv
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_groq import ChatGroq
-from langchain_classic.memory import ConversationBufferMemory
 
 
 load_dotenv()
@@ -32,6 +31,43 @@ from services.prompts import (
     ANSWER_EVALUATION_PROMPT,
 )
 from core.redis_session_store import RedisSessionStore
+from core.config import MAX_PRIMARY_QUESTIONS
+
+
+RATING_TO_SCORE = {
+    "poor": 40.0,
+    "fair": 60.0,
+    "good": 80.0,
+    "excellent": 95.0,
+}
+
+# Frontend uses a 0–10 scale; LLM score is expected on 1–10.
+RATING_TO_SCORE_10 = {
+    "poor": 4.0,
+    "fair": 6.0,
+    "good": 8.0,
+    "excellent": 9.5,
+}
+
+
+def _fill_prompt(template: str, **kwargs) -> str:
+    """Replace {placeholders} without interpreting JSON example braces via str.format."""
+    out = template
+    for key, value in kwargs.items():
+        out = out.replace("{" + key + "}", str(value))
+    return out
+
+
+def _rating_value(rating) -> str:
+    if hasattr(rating, "value"):
+        return str(rating.value).lower()
+    return str(rating).lower()
+
+
+def _category_label(category) -> str:
+    if hasattr(category, "value"):
+        return str(category.value)
+    return str(category)
 
 
 class InterviewQuestionGenerator:
@@ -50,14 +86,18 @@ class InterviewQuestionGenerator:
             max_tokens=8000
         )
 
-    def generate_questions(self, resume_text: str) -> List[InterviewQuestion]:
-        """Generate interview questions from resume text"""
+    def generate_questions(
+        self,
+        resume_text: str,
+        job_role: str = "Software Engineer",
+    ) -> Tuple[List[InterviewQuestion], dict]:
+        """Generate interview questions from resume text, steered by job role."""
 
-        print("Before format")
-        prompt = QUESTION_GENERATION_PROMPT.format(
-            resume_text=resume_text
+        prompt = _fill_prompt(
+            QUESTION_GENERATION_PROMPT,
+            resume_text=resume_text,
+            job_role=job_role or "Software Engineer",
         )
-        print("After format")
 
         try:
             response = self.model.invoke([
@@ -67,60 +107,44 @@ class InterviewQuestionGenerator:
 
             content = response.content.strip()
 
-            print(f"\n[DEBUG] Raw response length: {len(content)}")
-            print(f"[DEBUG] First 300 chars: {repr(content[:300])}")
-            print(f"[DEBUG] Last 200 chars: {repr(content[-200:])}")
-
-
             if "```json" in content:
-                print("[DEBUG] Found ```json wrapper")
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
-                print("[DEBUG] Found ``` wrapper")
                 parts = content.split("```")
                 content = parts[1] if len(parts) > 1 else content
 
             content = content.strip()
 
-            print(f"[DEBUG] After removing markdown: {len(content)} chars")
-            print(f"[DEBUG] First 200 chars: {repr(content[:200])}")
-
-
             first_brace = content.find('{')
             last_brace = content.rfind('}')
 
-            print(f"[DEBUG] First brace at: {first_brace}, Last brace at: {last_brace}")
-
             if first_brace == -1 or last_brace == -1 or first_brace >= last_brace:
-                print(f"[ERROR] Invalid brace positions")
-                print(f"[DEBUG] Full content:\n{content}")
                 raise ValueError("No valid JSON object found in response")
 
             content = content[first_brace:last_brace + 1]
-
-            print(f"[DEBUG] Extracted JSON: {len(content)} chars")
-            print(f"[DEBUG] First 150 chars of JSON: {repr(content[:150])}")
-
-
             data = json.loads(content)
-
-            print(f"[DEBUG] JSON parsed! Questions count: {len(data.get('questions', []))}")
-
 
             category_map = {
                 "skills": "skill",
                 "skill": "skill",
+                "generic_skill": "generic_skill",
+                "generic": "generic_skill",
+                "generic technical": "generic_skill",
                 "projects": "project",
                 "project": "project",
                 "experience": "experience",
                 "experiences": "experience",
                 "achievements": "achievement",
-                "achievement": "achievement"
+                "achievement": "achievement",
+                "scenario": "scenario",
+                "scenarios": "scenario",
+                "engineering scenario": "scenario",
+                "behavioral": "behavioral",
+                "behavioural": "behavioral",
             }
 
-
             questions = []
-            valid_difficulties = {"intermediate", "advanced", "expert"}
+            valid_difficulties = {"easy", "intermediate", "advanced", "expert"}
             for idx, q in enumerate(data.get("questions", []), 1):
                 category = str(q.get("category", "skill")).lower().strip()
                 category = category_map.get(category, "skill")
@@ -135,11 +159,13 @@ class InterviewQuestionGenerator:
                     name=q.get("name", ""),
                     primary_question=q.get("primary_question", ""),
                     context=q.get("context", ""),
-                    difficulty_level=diff
+                    difficulty_level=diff,
+                    follow_up_question=q.get("follow_up_question", "") or "",
                 )
                 questions.append(question)
 
-            print(f"[DEBUG] Created {len(questions)} InterviewQuestion objects\n")
+            # Hard cap so live interviews stay practical even if the model over-generates.
+            questions = questions[:MAX_PRIMARY_QUESTIONS]
 
             profile = data.get("extracted_profile", {})
             return questions, profile
@@ -158,21 +184,25 @@ class InterviewQuestionGenerator:
         context: str,
         conversation_history_text: str = "",
         current_depth: int = 1,
-        max_depth: int = 3
+        max_depth: int = 3,
+        follow_up_direction: str = "",
+        suggested_follow_up: str = "",
     ) -> str:
         """Generate follow-up question based on candidate answer and conversation history"""
 
-
         history_text = conversation_history_text if conversation_history_text else "[No prior follow-ups yet]"
 
-        prompt = FOLLOWUP_QUESTION_PROMPT.format(
+        prompt = _fill_prompt(
+            FOLLOWUP_QUESTION_PROMPT,
             primary_question=primary_question,
             difficulty_level=difficulty_level,
             context=context,
             candidate_answer=candidate_answer,
             conversation_history=history_text,
             current_depth=current_depth,
-            max_depth=max_depth
+            max_depth=max_depth,
+            follow_up_direction=follow_up_direction or "Probe for concrete implementation details and tradeoffs.",
+            suggested_follow_up=suggested_follow_up or "[None provided]",
         )
 
         try:
@@ -191,11 +221,12 @@ class InterviewQuestionGenerator:
         question: str,
         candidate_answer: str
     ) -> AnswerEvaluation:
-        """Evaluate candidate answer"""
+        """Evaluate candidate answer against the question that was actually asked."""
 
-        prompt = ANSWER_EVALUATION_PROMPT.format(
+        prompt = _fill_prompt(
+            ANSWER_EVALUATION_PROMPT,
             question=question,
-            answer=candidate_answer
+            answer=candidate_answer,
         )
 
         try:
@@ -206,7 +237,6 @@ class InterviewQuestionGenerator:
 
             content = response.content
 
-
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:
@@ -214,7 +244,6 @@ class InterviewQuestionGenerator:
                 content = parts[1] if len(parts) > 1 else content
 
             content = content.strip()
-
 
             first_brace = content.find('{')
             last_brace = content.rfind('}')
@@ -225,20 +254,40 @@ class InterviewQuestionGenerator:
             content = content[first_brace:last_brace + 1]
             data = json.loads(content)
 
+            rating_raw = str(data.get("rating", "fair")).lower().strip()
+            if rating_raw not in RATING_TO_SCORE_10:
+                rating_raw = "fair"
+
+            score_raw = data.get("score", RATING_TO_SCORE_10[rating_raw])
+            try:
+                score_val = float(score_raw)
+            except (TypeError, ValueError):
+                score_val = RATING_TO_SCORE_10[rating_raw]
+
+            # Normalize accidental 0–100 scores to 0–10.
+            if score_val > 10:
+                score_val = score_val / 10.0
+            score_val = max(1.0, min(10.0, score_val))
+
             return AnswerEvaluation(
-                rating=data.get("rating", "fair"),
-                strengths=data.get("strengths", []),
-                improvements=data.get("improvements", []),
-                follow_up_direction=data.get("follow_up_direction", "")
+                rating=rating_raw,
+                score=score_val,
+                strengths=data.get("strengths", []) or [],
+                improvements=data.get("improvements", []) or [],
+                missing_concepts=data.get("missing_concepts", []) or [],
+                follow_up_direction=data.get("follow_up_direction", "") or "",
             )
 
         except (json.JSONDecodeError, Exception) as e:
-
+            # Default to "good" (not "fair") so parse failures do not over-probe.
+            print(f"[WARN] evaluate_answer parse failed: {e}")
             return AnswerEvaluation(
-                rating=RatingEnum.FAIR,
+                rating=RatingEnum.GOOD,
+                score=RATING_TO_SCORE_10["good"],
                 strengths=["Answer provided"],
-                improvements=["Continue improving"],
-                follow_up_direction="Elaborate on implementation details"
+                improvements=["Could not fully parse automated evaluation; review manually if needed"],
+                missing_concepts=[],
+                follow_up_direction="Ask for one concrete example or implementation detail",
             )
 
 
@@ -246,10 +295,19 @@ class InterviewSessionManager:
     """Manage interview sessions"""
 
     def __init__(self):
-        """Initialize session storage (in-memory for now, can be replaced with database)"""
-
         self.session_store = RedisSessionStore()
         self.generator = InterviewQuestionGenerator()
+
+    def _save_session(self, session: InterviewSession) -> None:
+        """Persist session after every mutation."""
+        self.session_store.set(session.session_id, session)
+
+    def _append_history(self, session: InterviewSession, question: str, answer: str, kind: str) -> None:
+        block = f"[{kind}_QUESTION] {question}\n[{kind}_ANSWER] {answer}"
+        if session.conversation_history:
+            session.conversation_history = f"{session.conversation_history}\n\n{block}"
+        else:
+            session.conversation_history = block
 
     def create_session(
         self,
@@ -259,9 +317,7 @@ class InterviewSessionManager:
     ) -> InterviewSession:
         """Create a new interview session"""
 
-
-        questions, profile = self.generator.generate_questions(resume_text)
-
+        questions, profile = self.generator.generate_questions(resume_text, job_role=job_role)
 
         session_id = str(uuid.uuid4())
         session = InterviewSession(
@@ -270,12 +326,11 @@ class InterviewSessionManager:
             job_role=job_role,
             extracted_profile=profile,
             questions=questions,
-            memory=ConversationBufferMemory(return_messages=False)
+            conversation_history="",
+            memory=None,
         )
 
-
         self.session_store.set(session_id, session)
-
         return session
 
     def get_session(self, session_id: str) -> Optional[InterviewSession]:
@@ -310,23 +365,28 @@ class InterviewSessionManager:
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        current_question = self.get_current_question(session_id)
-        if not current_question:
+        if not answer or not str(answer).strip():
+            raise ValueError("Answer cannot be empty")
+
+        answer = str(answer).strip()
+
+        if session.current_question_index >= len(session.questions):
             raise ValueError(f"No current question in session {session_id}")
 
+        current_question = session.questions[session.current_question_index]
 
-        if not session.is_followup_mode:
-            session.memory.save_context(
-                {"input": f"[PRIMARY_QUESTION] {current_question.primary_question}"},
-                {"output": f"[ANSWER] {answer}"}
+        # Evaluate against the question that was actually asked.
+        if session.is_followup_mode:
+            question_asked = (
+                session.current_followup_question
+                or (session.follow_ups[-1].question if session.follow_ups else current_question.primary_question)
             )
+            history_kind = "FOLLOWUP"
         else:
-            last_followup = session.follow_ups[-1].question if session.follow_ups else ""
-            session.memory.save_context(
-                {"input": f"[FOLLOWUP_QUESTION] {last_followup}"},
-                {"output": f"[FOLLOWUP_ANSWER] {answer}"}
-            )
+            question_asked = current_question.primary_question
+            history_kind = "PRIMARY"
 
+        self._append_history(session, question_asked, answer, history_kind)
 
         candidate_answer = CandidateAnswer(
             question_id=current_question.id,
@@ -336,29 +396,25 @@ class InterviewSessionManager:
         )
         session.answers.append(candidate_answer)
 
-
         evaluation = self.generator.evaluate_answer(
-            question=current_question.primary_question,
+            question=question_asked,
             candidate_answer=answer
         )
 
-
         should_ask_followup = False
         action = "next_question"
-
 
         if not session.is_followup_mode:
             should_ask_followup = True
             session.is_followup_mode = True
             session.current_followup_depth = 1
         else:
-
             if (
                 session.current_followup_depth < session.max_followup_depth
                 and evaluation.rating in [
                     RatingEnum.POOR,
                     RatingEnum.FAIR,
-                    RatingEnum.GOOD
+                    RatingEnum.GOOD,
                 ]
             ):
                 session.current_followup_depth += 1
@@ -366,22 +422,31 @@ class InterviewSessionManager:
             else:
                 should_ask_followup = False
 
-
         follow_up_question = None
         if should_ask_followup:
             action = "follow_up"
+            # Prefer bank follow-up as a seed on first depth; always adapt via LLM.
+            suggested = current_question.follow_up_question if session.current_followup_depth == 1 else ""
+
+            difficulty = (
+                current_question.difficulty_level.value
+                if hasattr(current_question.difficulty_level, "value")
+                else str(current_question.difficulty_level)
+            )
             follow_up_q = self.generator.generate_followup(
                 primary_question=current_question.primary_question,
                 candidate_answer=answer,
-                difficulty_level=current_question.difficulty_level,
+                difficulty_level=difficulty,
                 context=current_question.context,
-                conversation_history_text=session.memory.buffer,
+                conversation_history_text=session.conversation_history,
                 current_depth=session.current_followup_depth,
-                max_depth=session.max_followup_depth
+                max_depth=session.max_followup_depth,
+                follow_up_direction=evaluation.follow_up_direction,
+                suggested_follow_up=suggested,
             )
 
             follow_up_question = follow_up_q
-
+            session.current_followup_question = follow_up_q
 
             follow_up = FollowUpQuestion(
                 original_question_id=current_question.id,
@@ -392,15 +457,21 @@ class InterviewSessionManager:
             )
             session.follow_ups.append(follow_up)
         else:
-
             action = "next_question"
+
+            # Persist evaluation for the answer that closed this thread.
+            session.follow_ups.append(FollowUpQuestion(
+                original_question_id=current_question.id,
+                depth=session.current_followup_depth,
+                question=question_asked,
+                candidate_answer=answer,
+                evaluation=evaluation
+            ))
+
             session.is_followup_mode = False
             session.current_followup_depth = 0
-            session.memory.clear()
-
-
-            if session.follow_ups and session.follow_ups[-1].original_question_id == current_question.id:
-                pass
+            session.current_followup_question = ""
+            session.conversation_history = ""
 
         try:
             eval_dict = evaluation.model_dump(mode="json")
@@ -408,7 +479,6 @@ class InterviewSessionManager:
             eval_dict = evaluation.dict()
             if "rating" in eval_dict and hasattr(eval_dict["rating"], "value"):
                 eval_dict["rating"] = eval_dict["rating"].value
-
 
         result = {
             "action": action,
@@ -418,7 +488,6 @@ class InterviewSessionManager:
             "next_question": None,
             "next_question_available": False
         }
-
 
         if action == "next_question":
             has_next = session.current_question_index < len(session.questions) - 1
@@ -430,23 +499,26 @@ class InterviewSessionManager:
                 result["next_question"] = {
                     "question_number": session.current_question_index + 1,
                     "total_questions": len(session.questions),
-                    "category": next_q.category,
+                    "category": _category_label(next_q.category),
                     "name": next_q.name,
                     "primary_question": next_q.primary_question,
                     "context": next_q.context,
-                    "difficulty_level": next_q.difficulty_level
+                    "difficulty_level": (
+                        next_q.difficulty_level.value
+                        if hasattr(next_q.difficulty_level, "value")
+                        else next_q.difficulty_level
+                    ),
                 }
             else:
-
                 session.status = "completed"
 
+        self._save_session(session)
         return result
 
     def proceed_to_next_question(self, session_id: str) -> bool:
         """
         Deprecated - progression now happens in submit_answer().
-        This is kept for backward compatibility only.
-        Move to next question
+        Kept for backward compatibility only.
         """
         session = self.get_session(session_id)
         if not session:
@@ -454,15 +526,16 @@ class InterviewSessionManager:
 
         if session.current_question_index < len(session.questions) - 1:
             session.current_question_index += 1
-
             session.is_followup_mode = False
             session.current_followup_depth = 0
-            session.memory.clear()
+            session.current_followup_question = ""
+            session.conversation_history = ""
+            self._save_session(session)
             return True
-        else:
 
-            session.status = "completed"
-            return False
+        session.status = "completed"
+        self._save_session(session)
+        return False
 
     def get_interview_progress(self, session_id: str) -> dict:
         """Get interview progress"""
@@ -499,33 +572,34 @@ class InterviewSessionManager:
             "qa_pairs": []
         }
 
-
         for answer in session.answers:
             question = next(
                 (q for q in session.questions if q.id == answer.question_id),
                 None
             )
             followups = [
-                    f for f in session.follow_ups
-                    if f.original_question_id == answer.question_id
-                ]
+                f for f in session.follow_ups
+                if f.original_question_id == answer.question_id
+            ]
 
             if question:
                 qa_pair = {
                     "question": question.primary_question,
-                    "category": question.category,
+                    "category": _category_label(question.category),
                     "answer": answer.answer,
-
                     "follow_ups": [
                         {
                             "question": f.question,
                             "candidate_answer": f.candidate_answer,
-                            "evaluation": f.evaluation.dict()
+                            "evaluation": (
+                                f.evaluation.model_dump(mode="json")
+                                if hasattr(f.evaluation, "model_dump")
+                                else f.evaluation.dict()
+                            ),
                         }
                         for f in followups
                     ]
                 }
-
                 report["qa_pairs"].append(qa_pair)
 
         return report
@@ -537,11 +611,15 @@ class InterviewSessionManager:
             raise ValueError(f"Session {session_id} not found")
 
         try:
+            all_evaluations = [follow_up.evaluation for follow_up in session.follow_ups]
 
-            all_evaluations = []
-            for follow_up in session.follow_ups:
-                all_evaluations.append(follow_up.evaluation)
-
+            strengths = []
+            improvements = []
+            missing = []
+            for ev in all_evaluations:
+                strengths.extend(ev.strengths or [])
+                improvements.extend(ev.improvements or [])
+                missing.extend(getattr(ev, "missing_concepts", None) or [])
 
             context = f"""
 Based on this interview for role: {session.job_role}
@@ -549,27 +627,39 @@ Based on this interview for role: {session.job_role}
 Candidate's Performance:
 - Total Questions: {len(session.questions)}
 - Answers Submitted: {len(session.answers)}
+- Evaluations Recorded: {len(all_evaluations)}
+
+Observed strengths (from evaluations):
+{json.dumps(strengths[:12], indent=2)}
+
+Observed improvements (from evaluations):
+{json.dumps(improvements[:12], indent=2)}
+
+Missing concepts:
+{json.dumps(missing[:12], indent=2)}
 
 Question Categories:
 """
+            for q in session.questions[:8]:
+                context += f"\n- {_category_label(q.category)}: {q.name}"
 
-            for q in session.questions[:5]:
-                context += f"\n- {q.category.value}: {q.name}"
+            context += """
 
-            context += "\n\nGenerate a structured improvement plan with:"
-            context += "\n1. Top 3 strengths demonstrated"
-            context += "\n2. Top 3 areas for improvement"
-            context += "\n3. Specific actionable recommendations"
-            context += "\n4. Top 3 focus areas"
-
+Return ONLY valid JSON with this shape:
+{
+  "strengths": ["...", "...", "..."],
+  "weaknesses": ["...", "...", "..."],
+  "recommendations": ["...", "...", "..."],
+  "focus_areas": ["...", "...", "..."]
+}
+"""
 
             response = self.generator.model.invoke([
-                SystemMessage(content="You are a career coach. Generate a JSON improvement plan."),
+                SystemMessage(content="You are a career coach. Generate only valid JSON improvement plan."),
                 HumanMessage(content=context)
             ])
 
             content = response.content.strip()
-
 
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
@@ -587,10 +677,10 @@ Question Categories:
             data = json.loads(content)
 
             return {
-                "strengths": data.get("strengths", []),
-                "weaknesses": data.get("weaknesses", []),
-                "recommendations": data.get("recommendations", []),
-                "focus_areas": data.get("focus_areas", [])
+                "strengths": data.get("strengths", []) or strengths[:3] or ["Participated in interview"],
+                "weaknesses": data.get("weaknesses", []) or improvements[:3] or ["Area for growth"],
+                "recommendations": data.get("recommendations", []) or ["Practice more interview questions"],
+                "focus_areas": data.get("focus_areas", []) or ["Technical depth", "Communication"],
             }
 
         except Exception as e:
@@ -603,27 +693,48 @@ Question Categories:
             }
 
     def calculate_interview_score(self, session_id: str) -> dict:
-        """Calculate comprehensive interview scores"""
+        """Calculate comprehensive interview scores from recorded evaluations."""
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-
         technical_scores = []
         for follow_up in session.follow_ups:
-            rating_map = {"poor": 40, "fair": 60, "good": 80, "excellent": 95}
-            score = rating_map.get(follow_up.evaluation.rating, 60)
-            technical_scores.append(score)
+            rating_key = _rating_value(follow_up.evaluation.rating)
+            if getattr(follow_up.evaluation, "score", None):
+                # evaluation.score is 1–10; convert to 0–100 for report metrics.
+                technical_scores.append(float(follow_up.evaluation.score) * 10.0)
+            else:
+                technical_scores.append(RATING_TO_SCORE.get(rating_key, 60.0))
 
-        avg_technical = sum(technical_scores) / len(technical_scores) if technical_scores else 0
+        # Also fold in answers that somehow lack follow-up records.
+        if not technical_scores and session.answers:
+            technical_scores = [60.0]
 
+        avg_technical = sum(technical_scores) / len(technical_scores) if technical_scores else 0.0
+
+        # Derive soft metrics from answer substance when proctoring feeds are absent.
+        answer_lengths = [len((a.answer or "").split()) for a in session.answers]
+        avg_words = (sum(answer_lengths) / len(answer_lengths)) if answer_lengths else 0.0
+        length_factor = min(1.0, avg_words / 80.0) if avg_words else 0.7
+
+        communication = round(max(40.0, min(95.0, avg_technical * (0.85 + 0.15 * length_factor))), 1)
+        confidence = round(max(40.0, min(95.0, avg_technical * (0.88 + 0.10 * length_factor))), 1)
+        # Eye contact remains a proxy until live proctoring metrics are persisted on the session.
+        eye_contact = round(max(40.0, min(95.0, avg_technical * 0.90)), 1)
+        resume_alignment = round(max(40.0, min(95.0, avg_technical * 0.93)), 1)
+        problem_solving = round(avg_technical * 0.9, 1)
+        overall = round(
+            (avg_technical + communication + confidence + eye_contact + resume_alignment) / 5,
+            1,
+        )
 
         return {
             "technical_score": round(avg_technical, 1),
-            "communication_score": 75.0,
-            "confidence_score": 78.0,
-            "eye_contact_score": 82.0,
-            "resume_alignment_score": 80.0,
-            "problem_solving_score": round(avg_technical * 0.9, 1),
-            "overall_score": round((avg_technical + 75 + 78 + 82 + 80) / 5, 1)
+            "communication_score": communication,
+            "confidence_score": confidence,
+            "eye_contact_score": eye_contact,
+            "resume_alignment_score": resume_alignment,
+            "problem_solving_score": problem_solving,
+            "overall_score": overall,
         }

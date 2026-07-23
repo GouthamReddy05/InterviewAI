@@ -921,17 +921,44 @@ async function processAnswer(userAnswer) {
         if (response.status !== 'success') throw new Error("Backend submission failed");
 
         let evaluation = response.evaluation;
+        const ratingMap = { poor: 4, fair: 6, good: 8, excellent: 9.5 };
+        let numericScore = 5;
+        if (typeof evaluation.score === 'number' && !Number.isNaN(evaluation.score)) {
+            numericScore = evaluation.score > 10 ? evaluation.score / 10 : evaluation.score;
+        } else if (evaluation.rating && ratingMap[String(evaluation.rating).toLowerCase()] != null) {
+            numericScore = ratingMap[String(evaluation.rating).toLowerCase()];
+        }
+        numericScore = Math.max(1, Math.min(10, Number(numericScore)));
+
+        const strengths = Array.isArray(evaluation.strengths) ? evaluation.strengths : [];
+        const improvements = Array.isArray(evaluation.improvements) ? evaluation.improvements : [];
+        const missingConcepts = Array.isArray(evaluation.missing_concepts) ? evaluation.missing_concepts : [];
+        const feedbackParts = [];
+        if (strengths.length) feedbackParts.push('Strengths: ' + strengths.slice(0, 2).join('; '));
+        if (improvements.length) feedbackParts.push('Improve: ' + improvements.slice(0, 2).join('; '));
+
         const ev = {
             question: currentQ.text,
             candidateAnswer: userAnswer,
-            score: evaluation.rating || evaluation.score || 5,
-            feedback: evaluation.feedback || "Good response.",
+            score: numericScore,
+            feedback: evaluation.feedback || feedbackParts.join(' | ') || 'Response recorded.',
+            idealAnswer: evaluation.follow_up_direction
+                ? `Next probe: ${evaluation.follow_up_direction}`
+                : (currentQ.ideal || 'Focus on concrete implementation, tradeoffs, and production impact.'),
+            correctness: numericScore,
+            depth: Math.max(1, Math.min(10, numericScore - (missingConcepts.length > 0 ? 0.5 : 0))),
+            completeness: Math.max(1, Math.min(10, numericScore - (improvements.length > 2 ? 1 : 0))),
+            conceptsMentioned: strengths.slice(0, 4),
+            missingConcepts: missingConcepts.slice(0, 4),
+            rating: evaluation.rating || null,
         };
         state.lastEvaluation = ev;
         state.evaluations.push(ev);
 
 
         state.metrics.technicalScore = Math.min(10.0, parseFloat(((state.metrics.technicalScore * (state.evaluations.length - 1) + ev.score) / state.evaluations.length).toFixed(1)));
+        state.metrics.problemSolving = Math.min(10.0, parseFloat((state.metrics.technicalScore * 0.9).toFixed(1)));
+        state.metrics.resumeKnowledge = Math.min(10.0, parseFloat((state.metrics.technicalScore * 0.85).toFixed(1)));
 
 
         const wordCount = userAnswer.split(/\s+/).length;
@@ -1223,33 +1250,36 @@ function _ragEvaluatorPanel() {
                 <div>
                     <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-1.5">Reference Ideal Answer</div>
                     <div class="text-slate-700 bg-slate-50 border border-slate-200 p-3 rounded-lg leading-relaxed text-[11px] max-h-24 overflow-y-auto">
-                        ${evalObj.idealAnswer}
+                        ${evalObj.idealAnswer || 'No reference answer available for this turn.'}
                     </div>
                 </div>
                 <div class="grid grid-cols-3 gap-3 text-center">
                     <div class="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
                         <div class="text-blue-700 text-[8px] font-mono uppercase tracking-widest">Correctness</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.correctness}/10</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.correctness != null ? evalObj.correctness : evalObj.score}/10</div>
                     </div>
                     <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
                         <div class="text-emerald-700 text-[8px] font-mono uppercase tracking-widest">Depth</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.depth}/10</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.depth != null ? evalObj.depth : evalObj.score}/10</div>
                     </div>
                     <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
                         <div class="text-amber-700 text-[8px] font-mono uppercase tracking-widest">Completeness</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.completeness}/10</div>
+                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.completeness != null ? evalObj.completeness : evalObj.score}/10</div>
                     </div>
                 </div>
 
                 <div>
                     <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Concept Alignment</div>
                     <div class="flex flex-wrap gap-2">
-                        ${evalObj.conceptsMentioned.map(c => `
+                        ${(evalObj.conceptsMentioned || []).map(c => `
                             <span class="bg-emerald-600 text-white text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">✓ ${c}</span>
                         `).join('')}
-                        ${evalObj.missingConcepts.map(c => `
+                        ${(evalObj.missingConcepts || []).map(c => `
                             <span class="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">Missing: ${c}</span>
                         `).join('')}
+                        ${(!(evalObj.conceptsMentioned || []).length && !(evalObj.missingConcepts || []).length)
+                            ? `<span class="text-slate-500 text-[10px]">${evalObj.feedback || 'Evaluation recorded.'}</span>`
+                            : ''}
                     </div>
                 </div>
             </div>

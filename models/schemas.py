@@ -10,12 +10,16 @@ from enum import Enum
 
 class CategoryEnum(str, Enum):
     SKILL = "skill"
+    GENERIC_SKILL = "generic_skill"
     PROJECT = "project"
     EXPERIENCE = "experience"
     ACHIEVEMENT = "achievement"
+    SCENARIO = "scenario"
+    BEHAVIORAL = "behavioral"
 
 
 class DifficultyLevel(str, Enum):
+    EASY = "easy"
     INTERMEDIATE = "intermediate"
     ADVANCED = "advanced"
     EXPERT = "expert"
@@ -35,6 +39,7 @@ class InterviewQuestion(BaseModel):
     primary_question: str
     context: str
     difficulty_level: DifficultyLevel
+    follow_up_question: str = ""
 
     class Config:
         json_schema_extra = {
@@ -44,7 +49,8 @@ class InterviewQuestion(BaseModel):
                 "name": "Python",
                 "primary_question": "Describe a production issue you solved using Python.",
                 "context": "Understanding real-world debugging and optimization",
-                "difficulty_level": "advanced"
+                "difficulty_level": "advanced",
+                "follow_up_question": "How did you verify the fix in production?"
             }
         }
 
@@ -59,8 +65,10 @@ class CandidateAnswer(BaseModel):
 
 class AnswerEvaluation(BaseModel):
     rating: RatingEnum
+    score: float = 6.0
     strengths: List[str]
     improvements: List[str]
+    missing_concepts: List[str] = []
     follow_up_direction: str
 
 
@@ -81,7 +89,6 @@ class InterviewSession(BaseModel):
     questions: List[InterviewQuestion]
     current_question_index: int = 0
 
-
     is_followup_mode: bool = False
     current_followup_depth: int = 0
     max_followup_depth: int = 3
@@ -90,7 +97,9 @@ class InterviewSession(BaseModel):
     answers: List[CandidateAnswer] = []
     follow_ups: List[FollowUpQuestion] = []
 
-
+    # Plain-text history (JSON-safe). Replaces ConversationBufferMemory.
+    conversation_history: str = ""
+    # Legacy field kept for older serialized sessions; unused.
     memory: Any = None
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -277,15 +286,12 @@ class InterviewReport(BaseModel):
     questions_answered: int
     total_questions: int
 
-
     metrics: InterviewMetrics
     communication_analysis: CommunicationAnalysis
     face_analysis: FaceAnalysis
     cheating_detection: CheatingDetectionResult
 
-
     q_and_a: List[dict]
-
 
     improvement_plan: ImprovementPlan
 

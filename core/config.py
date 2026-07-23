@@ -12,6 +12,9 @@ QUESTIONS_PER_PROJECT = 4
 QUESTIONS_PER_EXPERIENCE = 4
 QUESTIONS_PER_ACHIEVEMENT = 4
 
+# Cap primary questions used in a live session (generation prompt asks for 8–12).
+MAX_PRIMARY_QUESTIONS = 12
+
 
 MAX_SESSION_DURATION_HOURS = 2
 UPLOAD_FOLDER = "uploads"
