@@ -127,8 +127,8 @@ function renderAdmin() {
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition-colors">
                             <td class="px-4 py-4 font-mono text-slate-400 text-xs">#${u.id}</td>
-                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${u.username}</td>
-                            <td class="px-4 py-4 text-sm">${u.email}</td>
+                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${escapeHtml(u.username)}</td>
+                            <td class="px-4 py-4 text-sm">${escapeHtml(u.email)}</td>
                             <td class="px-4 py-4">${roleBadge}</td>
                         </tr>`;
                 });
@@ -152,9 +152,9 @@ function renderAdmin() {
                     const score = i.score !== null ? `<span class="font-semibold text-slate-950">${Math.round(i.score)}</span><span class="text-slate-400 text-[10px]">/100</span>` : '<span class="text-slate-400">-</span>';
                     tbody.innerHTML += `
                         <tr class="hover:bg-slate-50 transition-colors">
-                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${i.username}</td>
-                            <td class="px-4 py-4 text-sm">${i.job_role}</td>
-                            <td class="px-4 py-4"><span class="px-2.5 py-1 border rounded-md text-[10px] font-medium tracking-wider ${statusClass}">${i.status}</span></td>
+                            <td class="px-4 py-4 font-semibold text-slate-950 text-sm">${escapeHtml(i.username)}</td>
+                            <td class="px-4 py-4 text-sm">${escapeHtml(i.job_role)}</td>
+                            <td class="px-4 py-4"><span class="px-2.5 py-1 border rounded-md text-[10px] font-medium tracking-wider ${statusClass}">${escapeHtml(i.status)}</span></td>
                             <td class="px-4 py-4 text-sm">${score}</td>
                         </tr>`;
                 });

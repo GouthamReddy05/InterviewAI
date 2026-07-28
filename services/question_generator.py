@@ -3,6 +3,7 @@ Question Generation and Interview Logic
 """
 
 import json
+import logging
 import os
 import sys
 from typing import List, Optional, Tuple
@@ -13,6 +14,8 @@ from langchain_groq import ChatGroq
 
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), 'ml'))
@@ -31,7 +34,11 @@ from services.prompts import (
     ANSWER_EVALUATION_PROMPT,
 )
 from core.redis_session_store import RedisSessionStore
-from core.config import MAX_PRIMARY_QUESTIONS
+from core.config import MAX_ANSWER_CHARS, MAX_PRIMARY_QUESTIONS
+
+
+class QuestionGenerationError(RuntimeError):
+    """Raised when the LLM cannot produce usable interview questions."""
 
 
 RATING_TO_SCORE = {
@@ -171,10 +178,8 @@ class InterviewQuestionGenerator:
             return questions, profile
 
         except Exception as e:
-            print(f"[ERROR] Exception in generate_questions: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
-            raise Exception(f"Error generating questions: {str(e)}")
+            logger.exception("Question generation failed: %s: %s", type(e).__name__, e)
+            raise QuestionGenerationError(f"Error generating questions: {e}") from e
 
     def generate_followup(
         self,
@@ -278,9 +283,11 @@ class InterviewQuestionGenerator:
                 follow_up_direction=data.get("follow_up_direction", "") or "",
             )
 
-        except (json.JSONDecodeError, Exception) as e:
+        except Exception as e:
+            # `except (json.JSONDecodeError, Exception)` was redundant - the second
+            # arm already caught everything, including the first.
             # Default to "good" (not "fair") so parse failures do not over-probe.
-            print(f"[WARN] evaluate_answer parse failed: {e}")
+            logger.warning("evaluate_answer parse failed: %s", e)
             return AnswerEvaluation(
                 rating=RatingEnum.GOOD,
                 score=RATING_TO_SCORE_10["good"],
@@ -368,7 +375,9 @@ class InterviewSessionManager:
         if not answer or not str(answer).strip():
             raise ValueError("Answer cannot be empty")
 
-        answer = str(answer).strip()
+        # Truncate rather than reject, so a long dictation is still usable while
+        # the prompt sent to the LLM stays bounded.
+        answer = str(answer).strip()[:MAX_ANSWER_CHARS]
 
         if session.current_question_index >= len(session.questions):
             raise ValueError(f"No current question in session {session_id}")
@@ -684,7 +693,7 @@ Return ONLY valid JSON with this shape:
             }
 
         except Exception as e:
-            print(f"[ERROR] Failed to generate improvement plan: {e}")
+            logger.warning("Failed to generate improvement plan: %s", e)
             return {
                 "strengths": ["Participated in interview"],
                 "weaknesses": ["Area for growth"],
@@ -701,7 +710,9 @@ Return ONLY valid JSON with this shape:
         technical_scores = []
         for follow_up in session.follow_ups:
             rating_key = _rating_value(follow_up.evaluation.rating)
-            if getattr(follow_up.evaluation, "score", None):
+            # `is not None` rather than truthiness: a legitimate 0.0 score would
+            # otherwise silently fall through to the rating-based default.
+            if getattr(follow_up.evaluation, "score", None) is not None:
                 # evaluation.score is 1–10; convert to 0–100 for report metrics.
                 technical_scores.append(float(follow_up.evaluation.score) * 10.0)
             else:

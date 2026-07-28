@@ -4,8 +4,13 @@ Data Models for Interview System
 
 from pydantic import BaseModel, Field
 from typing import List, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC default (``datetime.utcnow`` is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc)
 
 
 class CategoryEnum(str, Enum):
@@ -60,7 +65,7 @@ class CandidateAnswer(BaseModel):
     answer: str
     is_followup: bool = False
     followup_depth: int = 0
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
 
 
 class AnswerEvaluation(BaseModel):
@@ -78,7 +83,7 @@ class FollowUpQuestion(BaseModel):
     question: str
     candidate_answer: str = ""
     evaluation: AnswerEvaluation
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utcnow)
 
 
 class InterviewSession(BaseModel):
@@ -102,7 +107,7 @@ class InterviewSession(BaseModel):
     # Legacy field kept for older serialized sessions; unused.
     memory: Any = None
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
     status: str = "in_progress"
 
     class Config:
@@ -137,7 +142,9 @@ class QuestionResponse(BaseModel):
 
 
 class AnswerSubmissionRequest(BaseModel):
-    answer: str
+    # Bounded so a hostile or runaway client cannot push an unbounded prompt
+    # into the LLM call. 20k chars is far above any realistic spoken answer.
+    answer: str = Field(..., min_length=1, max_length=20000)
 
 
 class FollowUpResponse(BaseModel):
@@ -295,7 +302,7 @@ class InterviewReport(BaseModel):
 
     improvement_plan: ImprovementPlan
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utcnow)
 
     class Config:
         json_schema_extra = {

@@ -65,7 +65,13 @@ const state = {
 
 
     lastEvaluation: null,
-    evaluations: []
+    evaluations: [],
+
+
+    resumeRawText: '',
+    tempExtracted: null,
+    reportData: null,
+    sessionEnded: false
 };
 
 
@@ -118,6 +124,14 @@ function resetState() {
     };
     state.lastEvaluation = null;
     state.evaluations = [];
+    // These are assigned dynamically by upload.js / results.js. Without clearing
+    // them, a new interview inherited the previous run's resume text and report.
+    state.resumeRawText = '';
+    state.tempExtracted = null;
+    state.reportData = null;
+    // Left true after the first interview, this silently suppressed the
+    // end-session call (and therefore the saved score) on every later run.
+    state.sessionEnded = false;
 }
 
 

@@ -1,33 +1,50 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON
+from datetime import datetime, timezone
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
-from datetime import datetime
+
 from core.database import Base
+
+
+def _utcnow() -> datetime:
+    """Timezone-aware UTC default (``datetime.utcnow`` is deprecated in 3.12+)."""
+    return datetime.now(timezone.utc)
+
 
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True, nullable=False)
-    email = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
-    is_admin = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    username = Column(String(64), unique=True, index=True, nullable=False)
+    email = Column(String(320), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+    is_admin = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
+    interviews = relationship(
+        "InterviewSessionModel",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
 
-    interviews = relationship("InterviewSessionModel", back_populates="user")
 
 class InterviewSessionModel(Base):
     __tablename__ = "interviews"
 
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    resume_name = Column(String)
-    job_role = Column(String)
-    status = Column(String, default="in_progress")
+    session_id = Column(String(64), unique=True, index=True, nullable=False)
+    # Ownership is required: an interview with no owner cannot be access-checked.
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+        nullable=False,
+    )
+    resume_name = Column(String(255))
+    job_role = Column(String(128))
+    status = Column(String(32), default="in_progress", nullable=False)
     score = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
+    created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
     report_data = Column(JSON, nullable=True)
 

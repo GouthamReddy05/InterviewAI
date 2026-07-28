@@ -41,6 +41,18 @@ function renderSignup() {
         document.getElementById('signupForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorBox = document.getElementById('errorBox');
+            errorBox.classList.add('hidden');
+
+            // Mirror the server-side rules so the user gets immediate feedback.
+            const password = document.getElementById('password').value;
+            if (password.length < 8 || !/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+                errorBox.textContent = 'Password must be at least 8 characters and include a letter and a number.';
+                errorBox.classList.remove('hidden');
+                return;
+            }
+
+            const submitBtn = e.target.querySelector('button[type=submit]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Creating account...'; }
             try {
                 const response = await fetch('/api/auth/signup', {
                     method: 'POST',
@@ -48,7 +60,7 @@ function renderSignup() {
                     body: JSON.stringify({
                         username: document.getElementById('username').value,
                         email: document.getElementById('email').value,
-                        password: document.getElementById('password').value
+                        password: password
                     })
                 });
                 const data = await response.json();
@@ -57,12 +69,14 @@ function renderSignup() {
                     state.step = 0;
                     render();
                 } else {
-                    errorBox.textContent = data.detail || 'Signup failed';
+                    errorBox.textContent = formatApiError(data, 'Signup failed');
                     errorBox.classList.remove('hidden');
                 }
             } catch (error) {
                 errorBox.textContent = 'Network error occurred';
                 errorBox.classList.remove('hidden');
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign Up'; }
             }
         });
     }, 100);

@@ -445,7 +445,7 @@ function renderActiveInterview() {
                             <span class="text-white text-xs font-semibold uppercase tracking-wider">Live Simulator Feed</span>
                         </div>
                         <span class="text-white/20">|</span>
-                        <span class="text-surface-400 text-xs hidden sm:inline">${name} — ${state.jobRole} (${state.difficulty.toUpperCase()})</span>
+                        <span class="text-surface-400 text-xs hidden sm:inline">${escapeHtml(name)} — ${escapeHtml(state.jobRole)} (${escapeHtml(String(state.difficulty).toUpperCase())})</span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span class="text-slate-200 text-xs font-mono bg-white/5 border border-white/10 px-2.5 py-1 rounded-md">${progressText}</span>
@@ -773,7 +773,7 @@ function updateWarningsList() {
     list.innerHTML = state.warnings.map(w => `
         <div class="flex items-start gap-1.5 text-[11px] leading-tight text-warning-400 bg-warning-500/5 border border-warning-500/10 rounded px-2 py-1 fade-in">
             <span class="mt-0.5 flex-shrink-0">⚠️</span>
-            <span>${w}</span>
+            <span>${escapeHtml(w)}</span>
         </div>
     `).join('');
 }
@@ -872,7 +872,7 @@ function addMessage(sender, text) {
             <div class="text-[10px] text-surface-500 uppercase tracking-widest mb-0.5 font-mono">
                 ${sender === 'ai' ? 'AI INTERVIEWER' : 'CANDIDATE'}
             </div>
-            <div class="text-[13px] leading-relaxed">${text}</div>
+            <div class="text-[13px] leading-relaxed">${escapeHtml(text)}</div>
         </div>
     `;
     chat.appendChild(div);
@@ -1159,7 +1159,7 @@ function _chatPanel(question) {
                     <div class="text-[9px] text-surface-500 uppercase tracking-widest mb-1 font-mono">
                         ${msg.sender === 'ai' ? 'INTERVIEWER' : 'YOU'}
                     </div>
-                    <div class="text-[13px] leading-relaxed">${msg.text}</div>
+                    <div class="text-[13px] leading-relaxed">${escapeHtml(msg.text)}</div>
                 </div>
             </div>`).join('')}
 
@@ -1307,7 +1307,7 @@ function _warningsPanel() {
                 : state.warnings.map(w => `
                     <div class="flex items-start gap-2 text-[11px] leading-tight text-[#ef4444] bg-[#ef4444]/10 border border-[#ef4444]/20 rounded-md px-3 py-2 fade-in">
                         <i data-lucide="alert-circle" class="w-3.5 h-3.5 flex-shrink-0 mt-px"></i>
-                        <span class="font-medium">${w}</span>
+                        <span class="font-medium">${escapeHtml(w)}</span>
                     </div>`).join('')
             }
         </div>

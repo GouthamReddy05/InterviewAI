@@ -42,7 +42,7 @@ function renderUpload() {
 
             <div class="mb-8">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Candidate Name</label>
-                <input type="text" id="nameInput" placeholder="e.g., Goutham" value="${state.candidateName}"
+                <input type="text" id="nameInput" placeholder="e.g., Goutham" value="${escapeAttr(state.candidateName)}"
                     class="ia-input w-full px-4 py-2.5 text-sm placeholder:text-slate-400"
                     onchange="state.candidateName=this.value">
             </div>
@@ -61,7 +61,7 @@ function renderUpload() {
                                     <i data-lucide="file-text" class="w-5 h-5"></i>
                                 </div>
                                 <div class="text-left">
-                                    <div class="text-slate-950 text-sm font-semibold">${state.resumeFileName}</div>
+                                    <div class="text-slate-950 text-sm font-semibold">${escapeHtml(state.resumeFileName)}</div>
                                     <div class="text-slate-500 text-xs mt-1">Click to replace file</div>
                                 </div>
                             </div>
@@ -81,12 +81,12 @@ function renderUpload() {
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Target Role</label>
                 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     ${state.jobRoles.map(role => `
-                    <button onclick="selectJobRole('${role}')"
+                    <button onclick="selectJobRole('${escapeJsString(role)}')"
                         class="p-3 rounded-lg border text-center transition-all text-xs font-semibold
                                ${state.jobRole === role
                                    ? 'border-blue-600 bg-blue-600 text-white'
                                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-300 hover:text-slate-950'}">
-                        ${role}
+                        ${escapeHtml(role)}
                     </button>
                     `).join('')}
                 </div>

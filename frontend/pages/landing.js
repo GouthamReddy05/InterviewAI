@@ -65,7 +65,7 @@ function renderLanding() {
                             Upload a resume, run a realistic session, and get a report that connects technical depth, communication, and focus into a clear next practice plan.
                         </p>
                         <div class="flex flex-col sm:flex-row gap-3 mt-8">
-                            <button onclick="${isAuthed ? 'state.step=1;render()' : 'openAuthModal(\'signup\')'}" class="ia-button-primary px-5 py-3 text-sm font-semibold flex items-center justify-center gap-2 w-max">
+                            <button onclick="${isAuthed ? 'resetState();state.step=1;render()' : 'openAuthModal(\'signup\')'}" class="ia-button-primary px-5 py-3 text-sm font-semibold flex items-center justify-center gap-2 w-max">
                                 Start interview <i data-lucide="play" class="w-4 h-4"></i>
                             </button>
                         </div>

@@ -61,12 +61,12 @@ function renderInterviewSetup() {
                     <div class="flex items-center justify-between mb-5"><div><p class="text-white text-sm font-semibold">Session preview</p><p class="text-surface-500 text-xs mt-1">What you’re bringing in</p></div><span class="setup-step-dot w-2 h-2 rounded-full bg-emerald-400"></span></div>
                     <div class="rounded-xl border border-white/10 bg-black/10 p-4 mb-5">
                         <p class="text-[10px] uppercase tracking-widest text-surface-500 font-semibold">Candidate</p>
-                        <p class="text-white font-medium mt-1">${name}</p>
-                        <p class="text-surface-400 text-xs mt-1">${state.jobRole}</p>
+                        <p class="text-white font-medium mt-1">${escapeHtml(name)}</p>
+                        <p class="text-surface-400 text-xs mt-1">${escapeHtml(state.jobRole)}</p>
                     </div>
                     <div class="space-y-4 text-xs">
                         <div class="flex items-center justify-between"><span class="text-surface-500">Questions</span><span class="text-white font-mono">${state.questions.length}</span></div>
-                        <div class="flex items-center justify-between"><span class="text-surface-500">Difficulty</span><span class="text-indigo-300 font-semibold capitalize">${state.difficulty}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-surface-500">Difficulty</span><span class="text-indigo-300 font-semibold capitalize">${escapeHtml(state.difficulty)}</span></div>
                         <div class="flex items-center justify-between"><span class="text-surface-500">Focus checks</span><span class="text-emerald-300">Ready</span></div>
                     </div>
                     <div class="border-t border-white/10 mt-5 pt-5">

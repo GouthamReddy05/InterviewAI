@@ -37,6 +37,9 @@ function renderLogin() {
         document.getElementById('loginForm')?.addEventListener('submit', async (e) => {
             e.preventDefault();
             const errorBox = document.getElementById('errorBox');
+            errorBox.classList.add('hidden');
+            const submitBtn = e.target.querySelector('button[type=submit]');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Signing in...'; }
             const formData = new FormData();
             formData.append('username', document.getElementById('username').value);
             formData.append('password', document.getElementById('password').value);
@@ -48,12 +51,14 @@ function renderLogin() {
                     state.step = 0;
                     render();
                 } else {
-                    errorBox.textContent = data.detail || 'Login failed';
+                    errorBox.textContent = formatApiError(data, 'Login failed');
                     errorBox.classList.remove('hidden');
                 }
             } catch (error) {
                 errorBox.textContent = 'Network error occurred';
                 errorBox.classList.remove('hidden');
+            } finally {
+                if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Sign In'; }
             }
         });
     }, 100);

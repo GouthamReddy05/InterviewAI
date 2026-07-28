@@ -1,7 +1,23 @@
+# Secrets
 .env
+.env.local
+*.pem
+
+# Python
 venv/
+.venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+.pytest_cache/
+
+# Node
 node_modules/
+
+# OS
+.DS_Store
+
+# Runtime artifacts
+uploads/
+*.log

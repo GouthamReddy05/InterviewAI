@@ -131,7 +131,7 @@ function renderResults() {
                     Interview Report
                 </h1>
                 <p class="text-base text-slate-600 max-w-2xl mx-auto">
-                    Candidate <strong class="text-slate-950 font-semibold">${name}</strong> &middot; Role <strong class="text-slate-950 font-semibold">${state.jobRole}</strong>
+                    Candidate <strong class="text-slate-950 font-semibold">${escapeHtml(name)}</strong> &middot; Role <strong class="text-slate-950 font-semibold">${escapeHtml(state.jobRole)}</strong>
                 </p>
             </header>
 
@@ -225,7 +225,7 @@ function renderResults() {
                         Core Strengths
                     </h3>
                     <ul class="space-y-4 relative z-10">
-                        \${strengthsHtml}
+                        ${strengthsHtml}
                     </ul>
                 </div>
 
@@ -236,7 +236,7 @@ function renderResults() {
                         Growth Opportunities
                     </h3>
                     <ul class="space-y-4 relative z-10">
-                        \${weaknessesHtml}
+                        ${weaknessesHtml}
                     </ul>
                 </div>
             </div>
@@ -270,7 +270,7 @@ function renderResults() {
 function _planItemEnhanced(color, text) {
     return `
     <li class="flex items-start gap-3 p-3 rounded-lg bg-slate-50 border border-slate-200 hover:bg-white transition-colors">
-        <i data-lucide="\${color === 'emerald' ? 'check-circle' : 'alert-circle'}" class="w-4 h-4 \${color === 'emerald' ? 'text-emerald-600' : 'text-amber-600'} flex-shrink-0 mt-0.5"></i>
-        <span class="text-sm text-slate-700 leading-relaxed">\${text}</span>
+        <i data-lucide="${color === 'emerald' ? 'check-circle' : 'alert-circle'}" class="w-4 h-4 ${color === 'emerald' ? 'text-emerald-600' : 'text-amber-600'} flex-shrink-0 mt-0.5"></i>
+        <span class="text-sm text-slate-700 leading-relaxed">${escapeHtml(text)}</span>
     </li>`;
 }

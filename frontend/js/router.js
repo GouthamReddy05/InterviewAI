@@ -4,6 +4,9 @@ const app = document.getElementById('app');
 
 function logoutUser() {
     localStorage.removeItem('interviewai_token');
+    // Clear interview data too, so the next person to sign in on this browser
+    // does not inherit the previous user's transcript, scores or report.
+    if (typeof resetState === 'function') resetState();
     state.step = 0;
     render();
 }

@@ -41,62 +41,93 @@ const API = {
         }
     },
 
+    /**
+     * Single place where every authenticated call is made.
+     *
+     * Previously only uploadResume checked for 401, so an expired token during a
+     * live interview produced a silent failure instead of sending the user back
+     * to the login screen. This also normalises non-JSON error bodies (e.g. a
+     * proxy's HTML 502 page) into a usable object rather than throwing on parse.
+     */
+    async _request(path, { method = 'GET', body = null, json = false } = {}) {
+        const extra = json ? { 'Content-Type': 'application/json' } : {};
+        const response = await fetch(`${this.BASE_URL}${path}`, {
+            method,
+            headers: this.getHeaders(extra),
+            body
+        });
+
+        if (response.status === 401) {
+            this.handleUnauthorized();
+            return { status: 'error', detail: 'Unauthorized' };
+        }
+
+        let data;
+        try {
+            data = await response.json();
+        } catch (parseError) {
+            return {
+                status: 'error',
+                detail: `Server returned an unexpected response (HTTP ${response.status})`
+            };
+        }
+
+        if (!response.ok) {
+            return {
+                status: 'error',
+                httpStatus: response.status,
+                detail: (typeof formatApiError === 'function')
+                    ? formatApiError(data, `Request failed (HTTP ${response.status})`)
+                    : (data && data.detail) || `Request failed (HTTP ${response.status})`
+            };
+        }
+        return data;
+    },
+
 
     async getCurrentQuestion(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/question`, { headers: this.getHeaders() });
-        return await response.json();
+        return this._request(`/session/${encodeURIComponent(sessionId)}/question`);
     },
 
 
     async submitAnswer(sessionId, answer) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/answer`, {
+        return this._request(`/session/${encodeURIComponent(sessionId)}/answer`, {
             method: 'POST',
-            headers: this.getHeaders({
-                'Content-Type': 'application/json'
-            }),
+            json: true,
             body: JSON.stringify({ answer })
         });
-        return await response.json();
     },
 
 
     async nextQuestion(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/next-question`, {
-            method: 'POST',
-            headers: this.getHeaders()
+        return this._request(`/session/${encodeURIComponent(sessionId)}/next-question`, {
+            method: 'POST'
         });
-        return await response.json();
     },
 
 
     async getProgress(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/progress`, { headers: this.getHeaders() });
-        return await response.json();
+        return this._request(`/session/${encodeURIComponent(sessionId)}/progress`);
     },
 
 
     async getScores(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/scores`, { headers: this.getHeaders() });
-        return await response.json();
+        return this._request(`/session/${encodeURIComponent(sessionId)}/scores`);
     },
 
 
     async getComprehensiveReport(sessionId) {
-        const response = await fetch(`${this.BASE_URL}/session/${sessionId}/comprehensive-report`, { headers: this.getHeaders() });
-        return await response.json();
+        return this._request(`/session/${encodeURIComponent(sessionId)}/comprehensive-report`);
     },
 
 
     async endSession(sessionId, finalScore) {
         try {
-            const response = await fetch(`${this.BASE_URL}/session/${sessionId}/end`, {
+            return await this._request(`/session/${encodeURIComponent(sessionId)}/end`, {
                 method: 'POST',
-                headers: this.getHeaders({
-                    'Content-Type': 'application/json'
-                }),
+                json: true,
                 body: JSON.stringify({ score: finalScore })
             });
-            return await response.json();
         } catch (error) {
             console.error('End session error:', error);
             return { status: 'error' };
