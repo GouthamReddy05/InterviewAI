@@ -206,7 +206,7 @@ class InterviewQuestionGenerator:
             conversation_history=history_text,
             current_depth=current_depth,
             max_depth=max_depth,
-            follow_up_direction=follow_up_direction or "Probe for concrete implementation details and tradeoffs.",
+            follow_up_direction=follow_up_direction or "Ask for a concrete example, at a depth appropriate to the candidate's level.",
             suggested_follow_up=suggested_follow_up or "[None provided]",
         )
 

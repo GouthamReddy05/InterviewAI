@@ -1,10 +1,12 @@
 from elevenlabs.client import ElevenLabs
 from elevenlabs.play import play
 import os
+from dotenv import load_dotenv
 
+load_dotenv()
 
 eleven = ElevenLabs(
-    api_key="dbb0dafcd098a4b61eac7c9c038282f29ed39950fd87301d0ff6b65b1d8095a0"
+    api_key=os.environ.get("ELEVEN_LABS_API_KEY")
 )
 
 def generate_question(question):
