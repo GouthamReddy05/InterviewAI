@@ -44,7 +44,7 @@ RUN pip install --upgrade pip \
     # slim server image does not have — the container dies on `import cv2`.
     # Removing both and reinstalling only headless is the reliable fix; the
     # pin also keeps ultralytics from dragging in the untested OpenCV 5.x.
-    && pip uninstall -y opencv-python opencv-python-headless \
+    && pip uninstall -y opencv-python opencv-contrib-python opencv-python-headless \
     && pip install "opencv-python-headless>=4.9.0,<5.0"
 
 # Pre-download the faster-whisper weights (~460 MB) into the image. Without

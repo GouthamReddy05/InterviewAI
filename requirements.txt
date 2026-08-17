@@ -41,7 +41,12 @@ opencv-python-headless>=4.9.0,<5.0
 # initialise, falling back to an overlay that cannot detect anything. A single
 # detector that can silently stop is not proctoring — the two fail for
 # different reasons, which is the whole value of running both.
-mediapipe>=0.10.14
+#
+# Capped below 1.0: MediaPipe 1.x removes the legacy `mp.solutions` API this
+# code uses (FaceMesh lives under Tasks there instead), so an unbounded range
+# installs a version where `mp.solutions.face_mesh` does not exist and face
+# detection silently degrades to a warm-up warning. Same trap as OpenCV 5.
+mediapipe>=0.10.14,<1.0
 
 ultralytics>=8.2.0
 
