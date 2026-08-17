@@ -38,6 +38,8 @@ from services.prompts import (
 from services.llm_json import extract_json_object
 from core.redis_session_store import RedisSessionStore
 from core.config import (
+    GROQ_MAX_TOKENS,
+    GROQ_MODEL,
     LLM_MAX_RETRIES,
     LLM_TIMEOUT_SECONDS,
     MAX_ANSWER_CHARS,
@@ -159,9 +161,9 @@ class InterviewQuestionGenerator:
 
         self.model = ChatGroq(
             groq_api_key=self.api_key,
-            model="llama-3.3-70b-versatile",
+            model=GROQ_MODEL,
             temperature=0.2,
-            max_tokens=8000,
+            max_tokens=GROQ_MAX_TOKENS,
             # Previously unset, so an unbounded call inside a threadpool worker
             # could hold a request thread until the upstream gave up. These two
             # constants had been sitting in core/config.py unread.

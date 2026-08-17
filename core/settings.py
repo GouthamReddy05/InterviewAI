@@ -36,6 +36,18 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=480, ge=1, description="JWT expiry in minutes")
 
     groq_api_key: SecretStr = Field(..., description="Groq API key for LLM calls")
+    # Configurable on purpose. This was hardcoded to llama-3.3-70b-versatile,
+    # which Groq later decommissioned — the failure surfaced only as a 502 from
+    # /api/upload-resume with "model_not_found" buried in the server log. A
+    # provider retiring a model is routine; needing a code change and a rebuild
+    # to survive it is not.
+    groq_model: str = Field(default="openai/gpt-oss-120b", description="Groq chat model id")
+    # Reserved output budget. Groq counts max_tokens against the per-minute
+    # token limit *before* the call runs, so an oversized value fails with a 413
+    # rather than merely wasting headroom. 8000 was sized for a different model
+    # and exceeded the free tier's 8k TPM on its own. Question generation is the
+    # only call that needs real room: 8-12 question objects plus a profile.
+    groq_max_tokens: int = Field(default=4000, ge=256, le=32000, description="Max output tokens per LLM call")
 
     # Optional: text-to-speech returns 503 when this is unset rather than
     # falling back to a baked-in key.

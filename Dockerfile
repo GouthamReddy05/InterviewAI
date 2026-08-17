@@ -37,7 +37,15 @@ COPY requirements.txt .
 # build as a transitive dependency of ultralytics further down.
 RUN pip install --upgrade pip \
     && pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2.0" \
-    && pip install -r requirements.txt
+    && pip install -r requirements.txt \
+    # ultralytics depends on opencv-python, so pip installs it *alongside*
+    # opencv-python-headless. Both ship a `cv2` package, the non-headless one
+    # wins at import, and it links against X11 (libxcb, libSM, libXext) that a
+    # slim server image does not have — the container dies on `import cv2`.
+    # Removing both and reinstalling only headless is the reliable fix; the
+    # pin also keeps ultralytics from dragging in the untested OpenCV 5.x.
+    && pip uninstall -y opencv-python opencv-python-headless \
+    && pip install "opencv-python-headless>=4.9.0,<5.0"
 
 # Pre-download the faster-whisper weights (~460 MB) into the image. Without
 # this, the model is fetched on the first transcription — a multi-minute stall

@@ -36,6 +36,9 @@ LLM_MAX_RETRIES = 3
 LLM_TIMEOUT_SECONDS = 60
 
 
+GROQ_MODEL = settings.groq_model
+GROQ_MAX_TOKENS = settings.groq_max_tokens
+
 DATABASE_URL = settings.database_url
 
 
