@@ -354,7 +354,14 @@ function renderLanding() {
                         localStorage.setItem('interviewai_token', data.access_token);
                         window.location.reload();
                     } else {
-                        errorBox.textContent = data.detail || (type === 'login' ? 'Login failed' : 'Signup failed');
+                        // FastAPI returns `detail` as a string for HTTPException but as an
+                        // array of error objects for a 422 validation failure. Assigning
+                        // that array to textContent rendered "[object Object]" and hid the
+                        // actual reason. formatApiError() already existed in utils.js for
+                        // exactly this and was simply never wired in here.
+                        errorBox.textContent = formatApiError(
+                            data, type === 'login' ? 'Login failed' : 'Signup failed'
+                        );
                         errorBox.classList.remove('hidden');
                     }
                 } catch (error) {

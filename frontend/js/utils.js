@@ -56,7 +56,21 @@ function formatApiError(data, fallback) {
     if (typeof detail === 'string' && detail.trim()) return detail;
     if (Array.isArray(detail) && detail.length) {
         const messages = detail
-            .map(d => (d && typeof d.msg === 'string' ? d.msg.replace(/^Value error,\s*/, '') : null))
+            .map(d => {
+                if (!d || typeof d.msg !== 'string') return null;
+                const msg = d.msg.replace(/^Value error,\s*/, '');
+                // Pydantic's built-in constraint messages name the type, not the
+                // field ("String should have at least 8 characters"), which does
+                // not tell the user *which* input to fix. `loc` carries the field
+                // name; prepend it when the message does not already say so.
+                const field = Array.isArray(d.loc) ? d.loc[d.loc.length - 1] : null;
+                if (field && typeof field === 'string' && field !== 'body'
+                    && !msg.toLowerCase().includes(field.toLowerCase())) {
+                    const label = field.charAt(0).toUpperCase() + field.slice(1);
+                    return `${label}: ${msg.charAt(0).toLowerCase()}${msg.slice(1)}`;
+                }
+                return msg;
+            })
             .filter(Boolean);
         if (messages.length) return messages.join(' ');
     }
