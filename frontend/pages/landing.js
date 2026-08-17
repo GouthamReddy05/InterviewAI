@@ -1,7 +1,21 @@
 
 
 function renderLanding() {
-    const isAuthed = localStorage.getItem('interviewai_token');
+    // Structural check, not proof of authentication: a token signed with a
+    // rotated secret still decodes and still looks unexpired. hasUsableToken()
+    // clears the obviously-dead cases; verifySession() below asks the server
+    // about the rest. Previously this tested only that *a string existed*, so a
+    // stale token rendered a signed-in header with no route to the login screen
+    // while every API call 401'd.
+    const isAuthed = API.hasUsableToken();
+
+    if (isAuthed && !renderLanding._verified) {
+        renderLanding._verified = true;
+        API.verifySession().then(ok => {
+            if (!ok && state.step === 0) render();   // token was rejected: re-render logged out
+        });
+    }
+
     const features = [
         { icon: 'file-search', title: 'Resume-aware questions', text: 'Turns your resume into targeted interview prompts across projects, skills, and role expectations.' },
         { icon: 'messages-square', title: 'Live interview dialogue', text: 'Practice in a structured session with voice input, follow-ups, and an interviewer-style conversation.' },

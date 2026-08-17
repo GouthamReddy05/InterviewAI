@@ -191,6 +191,55 @@ const API = {
         }
     },
 
+    /**
+     * Cheap local check that a stored token is at least structurally usable.
+     *
+     * Deliberately NOT proof of authentication: a JWT payload is base64, not
+     * encrypted, so a token signed with a different secret still decodes and
+     * still reports an unexpired `exp`. Only the server can reject a bad
+     * signature — see verifySession(). This catches the malformed and expired
+     * cases without a round trip, and self-clears so the UI cannot sit in a
+     * half-signed-in state.
+     */
+    hasUsableToken() {
+        const token = localStorage.getItem('interviewai_token');
+        if (!token) return false;
+
+        const remaining = this.tokenSecondsRemaining();
+        if (remaining === null || remaining <= 0) {
+            // Unreadable or expired: not something this app issued, or no
+            // longer valid. Drop it rather than rendering a signed-in shell.
+            localStorage.removeItem('interviewai_token');
+            return false;
+        }
+        return true;
+    },
+
+    /**
+     * Ask the server whether the stored token is actually valid.
+     *
+     * The landing page renders a signed-in header from local state alone and
+     * makes no API call, so a token the server would reject — one signed with a
+     * rotated JWT_SECRET_KEY, or issued by a different deployment — left the UI
+     * showing "Dashboard" with no route back to the login screen while every
+     * request 401'd. Returns true when the session is genuinely good.
+     */
+    async verifySession() {
+        if (!this.hasUsableToken()) return false;
+        try {
+            const response = await fetch(`${this.BASE_URL}/auth/me`, { headers: this.getHeaders() });
+            if (response.ok) return true;
+            if (response.status === 401) {
+                localStorage.removeItem('interviewai_token');
+                return false;
+            }
+        } catch (error) {
+            // Network failure is not proof the token is bad; leave it alone.
+            console.warn('Could not verify session', error);
+        }
+        return true;
+    },
+
     /** Refresh when less than `thresholdSeconds` of token life is left. */
     async refreshIfExpiringSoon(thresholdSeconds = 900) {
         const remaining = this.tokenSecondsRemaining();

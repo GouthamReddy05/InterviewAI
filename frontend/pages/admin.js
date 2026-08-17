@@ -84,8 +84,8 @@ function renderAdmin() {
     if(window.lucide) { setTimeout(() => lucide.createIcons(), 10); }
 
     setTimeout(async () => {
-        const token = localStorage.getItem('interviewai_token');
-        if (!token) {
+        // Validated, not merely present — see API.hasUsableToken().
+        if (!API.hasUsableToken()) {
             state.step = 0;
             render();
             return;
@@ -96,7 +96,7 @@ function renderAdmin() {
         });
 
         try {
-            const headers = { 'Authorization': `Bearer ${token}` };
+            const headers = API.getHeaders();
 
 
             const userRes = await fetch('/api/auth/me', { headers });
