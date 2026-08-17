@@ -7,6 +7,10 @@ let cvAnimationId = null;
 let cheatCheckInterval = null;
 let tokenRefreshInterval = null;
 let attentionInterval = null;
+// True only when browser MediaPipe is genuinely running. startCvCanvas() is a
+// simulator, not a detector, and must never be mistaken for one.
+let faceTrackingLive = false;
+let emptyFrameStreak = 0;
 let lookAwaySeconds = 0;
 let silenceSeconds = 0;
 let recordingStartTime = 0;
@@ -271,12 +275,17 @@ function initMediaPipe() {
             height: 480
         });
 
-        cameraInstance.start().catch(err => {
-            console.warn("Camera frame capture throw. Falling back to offline mesh simulator.", err);
+        cameraInstance.start().then(() => {
+            faceTrackingLive = true;
+            console.info('[proctoring] browser MediaPipe active — face tracking is live');
+        }).catch(err => {
+            faceTrackingLive = false;
+            console.warn("[proctoring] camera capture failed; face tracking is NOT running", err);
             startCvCanvas();
         });
     } catch(err) {
-        console.error("Failed to initialize MediaPipe Face Mesh, running offline scan grids", err);
+        faceTrackingLive = false;
+        console.error("[proctoring] MediaPipe failed to initialise; face tracking is NOT running", err);
         startCvCanvas();
     }
 }
@@ -545,6 +554,26 @@ function startCvCanvas() {
         const w = canvas.width;
         const h = canvas.height;
 
+        // This function is reached only when MediaPipe could not start. It used
+        // to draw a synthetic box with 40 random keypoints and a hardcoded
+        // confidence — an overlay that reported "FACE TRACKED" forever and could
+        // never flag an absent face, which is indistinguishable from working
+        // proctoring. Say what is actually true instead; the server's
+        // person-count verdict (below) is what still detects an empty frame.
+        if (!faceTrackingLive) {
+            ctx.fillStyle = 'rgba(10, 10, 10, 0.55)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = '#eab308';
+            ctx.font = 'bold 12px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('LOCAL FACE TRACKING UNAVAILABLE', w / 2, h / 2 - 6);
+            ctx.fillStyle = '#888';
+            ctx.font = '10px monospace';
+            ctx.fillText('server checks still running', w / 2, h / 2 + 12);
+            cvAnimationId = requestAnimationFrame(draw);
+            return;
+        }
+
         if (state.simulations.noFace) {
             ctx.fillStyle = 'rgba(10, 10, 10, 0.85)';
             ctx.fillRect(0, 0, w, h);
@@ -758,6 +787,32 @@ function startFrameAnalysis() {
 
                     if (objectAnalysis) {
                         state.simulations.phoneUsage = objectAnalysis.phone_detected || false;
+
+                        // Server-side absence detection. YOLO's person count is
+                        // the only face-presence signal that survives the
+                        // browser's MediaPipe failing to load, so it is what
+                        // keeps proctoring honest in that case. Two consecutive
+                        // empty frames are required: a single miss at 320x240
+                        // and 0.45 confidence is just bad lighting.
+                        if (objectAnalysis.person_count === 0) {
+                            emptyFrameStreak++;
+                            if (emptyFrameStreak >= 2 && !state.simulations.noFace) {
+                                state.simulations.noFace = true;
+                                const msg = 'No one visible to the camera.';
+                                if (!state.warnings.includes(msg)) {
+                                    state.warnings.unshift(msg);
+                                    showTopBanner('NO PERSON DETECTED');
+                                    updateWarningsList();
+                                }
+                            }
+                        } else {
+                            emptyFrameStreak = 0;
+                            if (!faceTrackingLive && state.simulations.noFace) {
+                                state.simulations.noFace = false;
+                                state.warnings = state.warnings.filter(w => !w.includes('No one visible'));
+                                updateWarningsList();
+                            }
+                        }
 
 
                         const newObjects = objectAnalysis.prohibited_objects || [];

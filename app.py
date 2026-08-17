@@ -846,8 +846,17 @@ def _analyse_objects(frame_img, min_confidence: float = 0.45) -> dict:
 
         if person_count > 1:
             warnings.append(f"Multiple persons detected ({person_count})")
+        elif person_count == 0:
+            warnings.append("No person detected in frame")
 
-        result["person_count"] = max(1, person_count)
+        # Report the real count. This used to be max(1, person_count), an
+        # artificial floor that made "nobody in frame" structurally
+        # unrepresentable — so the server had no way to notice a candidate who
+        # had left, and the browser's MediaPipe was the only thing that could.
+        # That mattered once the browser overlay turned out to fall back to a
+        # simulator when its CDN-loaded WASM fails to initialise: the fake
+        # overlay reports tracking forever and never flags an absent face.
+        result["person_count"] = person_count
         result["phone_detected"] = phone_detected
         result["prohibited_objects"] = prohibited
         result["warnings"] = warnings
@@ -871,9 +880,15 @@ def _analyse_frame_sync(frame_bytes: bytes) -> dict:
         cheating_detected = True
         warnings.append("Phone detected in frame")
 
-    if object_result.get("person_count", 1) > 1:
+    person_count = object_result.get("person_count", 1)
+    if person_count > 1:
         cheating_detected = True
         warnings.append("Multiple persons detected")
+    elif person_count == 0:
+        # Not flagged as cheating on a single frame: YOLO at 320x240 and 0.45
+        # confidence can miss a person who is simply badly lit. The frontend
+        # requires consecutive empty frames before it warns.
+        warnings.append("No person detected")
 
     return {
         "status": "success",
@@ -902,6 +917,7 @@ def _record_proctoring(session_id: str, result: dict) -> None:
         "frames_analysed": 1,
         "phone_frames": 1 if objects.get("phone_detected") else 0,
         "multiple_person_frames": 1 if objects.get("person_count", 1) > 1 else 0,
+        "no_person_frames": 1 if objects.get("person_count", 1) == 0 else 0,
     }
     try:
         session_manager.session_store.increment_proctoring(session_id, fields)
