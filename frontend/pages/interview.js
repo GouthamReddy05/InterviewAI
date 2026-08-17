@@ -778,12 +778,43 @@ function startFrameAnalysis() {
 
                 const result = await API.analyzeFrame(frameBlob, state.sessionId);
 
-                    // face_analysis is gone from the response: the server no
-                    // longer runs MediaPipe. Face presence and gaze come from
-                    // the browser's own FaceMesh in initMediaPipe(), which
-                    // already sets these warnings at camera rate rather than
-                    // once every three seconds.
                     const objectAnalysis = result.object_analysis;
+                    // The server runs its own FaceMesh again. Its verdict is
+                    // authoritative for face presence when the browser's copy
+                    // is not running — which is exactly the case this exists
+                    // for, since the browser loads its WASM from a CDN and can
+                    // fail silently into a fallback that detects nothing.
+                    const faceAnalysis = result.face_analysis;
+                    if (faceAnalysis && !faceTrackingLive) {
+                        if (faceAnalysis.status === 'no_face') {
+                            if (!state.simulations.noFace) {
+                                state.simulations.noFace = true;
+                                const msg = 'Face missing. Return to the camera viewport.';
+                                if (!state.warnings.includes(msg)) {
+                                    state.warnings.unshift(msg);
+                                    showTopBanner('FACE NOT DETECTED');
+                                    updateWarningsList();
+                                }
+                            }
+                        } else if (faceAnalysis.status === 'multiple_faces') {
+                            if (!state.simulations.multipleFaces) {
+                                state.simulations.multipleFaces = true;
+                                const msg = 'Multiple people detected in frame!';
+                                if (!state.warnings.includes(msg)) {
+                                    state.warnings.unshift(msg);
+                                    showTopBanner('MULTIPLE PEOPLE DETECTED');
+                                    updateWarningsList();
+                                }
+                            }
+                        } else if (faceAnalysis.status === 'face_detected') {
+                            state.simulations.noFace = false;
+                            state.simulations.multipleFaces = false;
+                            state.simulations.lookAway = !!faceAnalysis.looking_away;
+                            state.warnings = state.warnings.filter(
+                                w => !w.includes('Face missing') && !w.includes('Multiple people'));
+                            updateWarningsList();
+                        }
+                    }
 
                     if (objectAnalysis) {
                         state.simulations.phoneUsage = objectAnalysis.phone_detected || false;

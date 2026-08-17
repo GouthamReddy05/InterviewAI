@@ -36,6 +36,13 @@ numpy>=1.26.0,<3.0
 
 opencv-python-headless>=4.9.0,<5.0
 
+# Server-side face and gaze detection. Kept alongside the browser's own
+# MediaPipe deliberately: the browser loads its WASM from a CDN and can fail to
+# initialise, falling back to an overlay that cannot detect anything. A single
+# detector that can silently stop is not proctoring — the two fail for
+# different reasons, which is the whole value of running both.
+mediapipe>=0.10.14
+
 ultralytics>=8.2.0
 
 --extra-index-url https://download.pytorch.org/whl/cpu

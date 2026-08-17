@@ -62,10 +62,10 @@ RUN if [ "$BAKE_WHISPER" = "1" ]; then \
 # ---------------------------------------------------------------------------
 FROM python:3.11-slim AS runtime
 
-# libglib2.0-0 is the one shared library opencv-python-headless still links
-# against. libgomp1 is OpenMP, used by torch and ctranslate2.
+# libglib2.0-0 and libgl1 are linked by opencv-python-headless and MediaPipe's
+# native bits; libgomp1 is OpenMP, used by torch and ctranslate2.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libglib2.0-0 libgomp1 curl \
+    && apt-get install -y --no-install-recommends libglib2.0-0 libgl1 libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /opt/venv /opt/venv

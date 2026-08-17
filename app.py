@@ -59,13 +59,40 @@ import cv2
 # They are now built on first use and cached.
 # ---------------------------------------------------------------------------
 
-# Face analysis is deliberately NOT done here. The browser already runs
-# MediaPipe FaceMesh on every frame at camera rate, using iris landmarks — a
-# finer gaze estimate than the nose-in-bounding-box approximation this file used
-# to compute, at ~90x the sample rate. Running a second, worse implementation
-# server-side bought only that the number was server-attested, and nothing in
-# this product relies on that attestation. Attention is reported by the browser
-# and labelled as self-reported; YOLO below remains the server-verified layer.
+# Server-side face analysis, restored.
+#
+# It was removed on the reasoning that the browser already ran MediaPipe with a
+# better (iris-based) gaze estimate at ~90x the sample rate, so a second
+# server-side copy bought only attestation nobody relied on. That reasoning
+# assumed the browser's copy works. It loads its WASM from a CDN and can fail
+# to initialise, and when it does the page falls back to a simulator — so the
+# only face detection in the system could silently stop while still looking
+# healthy. A second, independent implementation is worth its cost precisely
+# because it fails for different reasons than the first.
+#
+# MediaPipe's FaceMesh graph holds internal state and is not safe to call from
+# multiple threads at once; requests are serialised through this lock.
+_face_mesh_lock = threading.Lock()
+
+
+@lru_cache(maxsize=1)
+def get_face_mesh():
+    import mediapipe as mp
+
+    return mp.solutions.face_mesh.FaceMesh(
+        # Each frame independent. The alternative carries tracking state between
+        # calls, which is wrong here: one shared instance receives interleaved
+        # frames from different candidates on different webcams, so the tracker
+        # would be told "next frame of the same video" for a different person in
+        # a different room. Frames arrive every 3 seconds, so there is no
+        # temporal continuity to exploit anyway.
+        static_image_mode=True,
+        max_num_faces=5,
+        refine_landmarks=True,
+        min_detection_confidence=0.5,
+    )
+
+
 @lru_cache(maxsize=1)
 def get_yolo_model():
     import torch
@@ -175,7 +202,7 @@ async def _warm_models() -> None:
         return
 
     def _load() -> None:
-        for name, loader in (("YOLO", get_yolo_model),):
+        for name, loader in (("YOLO", get_yolo_model), ("FaceMesh", get_face_mesh)):
             try:
                 loader()
                 logger.info("Warmed %s", name)
@@ -777,6 +804,7 @@ async def end_session(
 
 _EMPTY_FRAME_RESPONSE = {
     "status": "error",
+    "face_analysis": {"status": "no_face", "faces_detected": 0, "looking_away": False},
     "object_analysis": {"person_count": 1, "phone_detected": False, "warnings": []},
     "cheating_detected": False,
     "warnings": [],
@@ -802,6 +830,64 @@ def _decode_frame(frame_bytes: bytes):
     if img is None or img.size == 0:
         return None
     return cv2.flip(img, 1)
+
+
+def _looking_away(face_landmarks) -> bool:
+    """Estimate gaze from head pose, on both axes.
+
+    Horizontal: nose x within the face's own bounding width, so someone sitting
+    off-centre in the webcam is not flagged — the naive version compared raw
+    nose x against fixed thresholds and did exactly that.
+
+    Vertical: nose y between the brow and the chin. The previous implementation
+    was horizontal-only, which meant it could not see the one posture that
+    matters most — head tilted down to read a phone in the lap.
+    """
+    try:
+        lm = face_landmarks.landmark
+        nose_x, nose_y = lm[1].x, lm[1].y
+        left_x, right_x = lm[234].x, lm[454].x
+        brow_y, chin_y = lm[10].y, lm[152].y
+
+        width = right_x - left_x
+        if width > 0:
+            ratio = (nose_x - left_x) / width
+            if ratio < 0.3 or ratio > 0.7:
+                return True
+
+        height = chin_y - brow_y
+        if height > 0:
+            v = (nose_y - brow_y) / height
+            # Nose normally sits around the middle of brow-to-chin. Looking
+            # down pushes it up this range; the band is deliberately wide,
+            # since a false accusation costs more than a missed one.
+            if v < 0.30 or v > 0.72:
+                return True
+    except (IndexError, AttributeError):
+        return False
+    return False
+
+
+def _analyse_face(frame_img) -> dict:
+    result = {"status": "no_face", "faces_detected": 0, "looking_away": False}
+    try:
+        rgb = cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB)
+        with _face_mesh_lock:
+            results = get_face_mesh().process(rgb)
+
+        if results.multi_face_landmarks:
+            count = len(results.multi_face_landmarks)
+            result["faces_detected"] = count
+            result["face_count"] = count
+            if count > 1:
+                result["status"] = "multiple_faces"
+            else:
+                result["status"] = "face_detected"
+                result["looking_away"] = _looking_away(results.multi_face_landmarks[0])
+    except Exception as exc:
+        logger.warning("Face detection error: %s", exc)
+        result["status"] = "error"
+    return result
 
 
 _SUSPICIOUS_CLASSES = {
@@ -871,10 +957,23 @@ def _analyse_frame_sync(frame_bytes: bytes) -> dict:
     if frame_img is None:
         return dict(_EMPTY_FRAME_RESPONSE)
 
+    face_result = _analyse_face(frame_img)
     object_result = _analyse_objects(frame_img)
 
     cheating_detected = False
     warnings: list[str] = []
+
+    # Face presence: two independent detectors. FaceMesh finds faces, YOLO finds
+    # people, and they fail for different reasons — which is the point of having
+    # both. Only warn once, preferring the more specific signal.
+    if face_result.get("status") == "no_face":
+        warnings.append("No face detected")
+    elif face_result.get("status") == "multiple_faces":
+        cheating_detected = True
+        warnings.append("Multiple faces detected")
+
+    if face_result.get("looking_away"):
+        warnings.append("Looking away from screen")
 
     if object_result.get("phone_detected"):
         cheating_detected = True
@@ -892,6 +991,7 @@ def _analyse_frame_sync(frame_bytes: bytes) -> dict:
 
     return {
         "status": "success",
+        "face_analysis": face_result,
         "object_analysis": object_result,
         "cheating_detected": cheating_detected,
         "warnings": warnings,
@@ -912,12 +1012,17 @@ def _record_proctoring(session_id: str, result: dict) -> None:
     Counters go to a separate Redis hash via HINCRBY so a frame arriving
     mid-answer cannot clobber the session blob.
     """
+    face = result.get("face_analysis") or {}
     objects = result.get("object_analysis") or {}
     fields = {
         "frames_analysed": 1,
         "phone_frames": 1 if objects.get("phone_detected") else 0,
         "multiple_person_frames": 1 if objects.get("person_count", 1) > 1 else 0,
         "no_person_frames": 1 if objects.get("person_count", 1) == 0 else 0,
+        # Server-observed face verdicts, independent of anything the browser says.
+        "no_face_frames": 1 if face.get("status") == "no_face" else 0,
+        "multiple_face_frames": 1 if face.get("status") == "multiple_faces" else 0,
+        "server_looking_away_frames": 1 if face.get("looking_away") else 0,
     }
     try:
         session_manager.session_store.increment_proctoring(session_id, fields)
