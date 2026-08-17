@@ -21,7 +21,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel, Field
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -30,13 +29,18 @@ dotenv.load_dotenv()
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR / "ml"))
 
-from core import auth, config, database
+from core import auth, config, database, rate_limit
 from core.settings import settings
 from api import admin_routes, auth_routes
 from ml.extract_text import extract_text_from_file
 from models import db_models
-from models.schemas import AnswerSubmissionRequest
-from services.question_generator import InterviewSessionManager
+from models.schemas import AnswerSubmissionRequest, AttentionReport
+from services.prompts import DIFFICULTY_DIRECTIVES
+from services.question_generator import (
+    EVALUATION_PARSE_FAILURES,
+    InterviewSessionManager,
+    StaleTurnError,
+)
 
 logging.basicConfig(
     level=getattr(logging, str(config.LOG_LEVEL).upper(), logging.INFO),
@@ -55,24 +59,13 @@ import cv2
 # They are now built on first use and cached.
 # ---------------------------------------------------------------------------
 
-# MediaPipe FaceMesh keeps internal graph state and is not safe to call from
-# multiple threads at once; requests are serialised through this lock.
-_face_mesh_lock = threading.Lock()
-
-
-@lru_cache(maxsize=1)
-def get_face_mesh():
-    import mediapipe as mp
-
-    return mp.solutions.face_mesh.FaceMesh(
-        static_image_mode=False,
-        max_num_faces=5,
-        refine_landmarks=True,
-        min_detection_confidence=0.5,
-        min_tracking_confidence=0.5,
-    )
-
-
+# Face analysis is deliberately NOT done here. The browser already runs
+# MediaPipe FaceMesh on every frame at camera rate, using iris landmarks — a
+# finer gaze estimate than the nose-in-bounding-box approximation this file used
+# to compute, at ~90x the sample rate. Running a second, worse implementation
+# server-side bought only that the number was server-attested, and nothing in
+# this product relies on that attestation. Attention is reported by the browser
+# and labelled as self-reported; YOLO below remains the server-verified layer.
 @lru_cache(maxsize=1)
 def get_yolo_model():
     import torch
@@ -159,10 +152,39 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-UPLOAD_FOLDER = BASE_DIR / config.UPLOAD_FOLDER
-UPLOAD_FOLDER.mkdir(parents=True, exist_ok=True)
-
 session_manager = InterviewSessionManager()
+
+
+@app.on_event("startup")
+async def _warm_models() -> None:
+    """Load YOLO in the background so the first frame does not pay for it.
+
+    The loaders stay lazy — that is what keeps ``app.py`` importable in a test
+    without the whole ML stack — but nothing warmed them, so the first candidate
+    to submit a frame ate the weights read on their request thread while the
+    frontend's 3-second timer kept firing. The hook is what is eager here, not
+    the functions.
+
+    Only YOLO is warmed. Whisper is not: it is first hit when a candidate stops
+    speaking, tens of seconds into the interview, by which point a lazy load has
+    had ample opportunity — and loading it eagerly would cost memory in every
+    worker for a model a text-only candidate never touches. The ElevenLabs
+    client is an HTTP client, not a model.
+    """
+    if os.getenv("SKIP_MODEL_WARMUP", "").lower() in {"1", "true", "yes"}:
+        return
+
+    def _load() -> None:
+        for name, loader in (("YOLO", get_yolo_model),):
+            try:
+                loader()
+                logger.info("Warmed %s", name)
+            except Exception as exc:
+                # A missing model must not stop the API from serving.
+                logger.warning("Could not warm %s: %s", name, exc)
+
+    threading.Thread(target=_load, name="model-warmup", daemon=True).start()
+
 
 templates = Jinja2Templates(directory=str(BASE_DIR / "frontend"))
 app.mount("/css", StaticFiles(directory=str(BASE_DIR / "frontend" / "css")), name="css")
@@ -292,7 +314,8 @@ async def upload_resume(
     resume: UploadFile = File(...),
     job_role: str = Form(...),
     resume_text: Optional[str] = Form(None),
-    current_user: db_models.User = Depends(auth.get_current_user),
+    difficulty: str = Form("medium"),
+    current_user: db_models.User = Depends(rate_limit.upload_rate_limit),
     db: Session = Depends(database.get_db),
 ):
     """Upload a resume and start an interview session."""
@@ -302,9 +325,23 @@ async def upload_resume(
     if len(job_role) > 128:
         raise HTTPException(status_code=400, detail="Job role is too long")
 
+    difficulty = (difficulty or "medium").strip().lower()
+    if difficulty not in DIFFICULTY_DIRECTIVES:
+        difficulty = "medium"
+
     raw = await _read_resume_upload(resume)
 
-    if resume_text and resume_text.strip():
+    # Client-extracted text is only trusted for PDFs, which is the only format
+    # the browser's pdf.js can actually read. handleFileUpload used to run
+    # pdf.js over every file: for a .docx it threw, the catch wrote a
+    # "Resume PDF: <filename>" placeholder, and that non-empty string was sent
+    # and preferred — so the whole interview was generated from a filename while
+    # ml/extract_text.py's DOCX path (which walks tables, where resumes keep
+    # skills and contact details) was unreachable through the UI.
+    suffix = Path(resume.filename or "").suffix.lower()
+    client_text_allowed = suffix == ".pdf"
+
+    if client_text_allowed and resume_text and resume_text.strip():
         text_to_use = resume_text.strip()
     else:
         try:
@@ -337,6 +374,7 @@ async def upload_resume(
             resume_text=text_to_use,
             job_role=job_role,
             resume_name=resume.filename,
+            difficulty=difficulty,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -382,8 +420,10 @@ async def upload_resume(
             "session_id": session.session_id,
             "total_questions": total,
             "job_role": job_role,
+            "difficulty": difficulty,
             "extracted_profile": session.extracted_profile,
             "questions": questions,
+            "turn": session.turn,
             "first_question": _question_payload(first_question, 1, total)
             if first_question
             else None,
@@ -420,14 +460,18 @@ async def submit_answer(
     session_id: str,
     request: AnswerSubmissionRequest,
     interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    current_user: db_models.User = Depends(rate_limit.answer_rate_limit),
 ):
     """Submit an answer to the current question or follow-up."""
     _load_live_session(session_id)
 
     try:
         result = await run_in_threadpool(
-            session_manager.submit_answer, session_id, request.answer
+            session_manager.submit_answer, session_id, request.answer, request.turn
         )
+    except StaleTurnError as exc:
+        # A duplicate or replayed submission, rejected before either LLM call.
+        raise HTTPException(status_code=409, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -438,10 +482,6 @@ async def submit_answer(
             "Answer submission",
         )
 
-    # Re-read the session so interview_complete reflects post-submit status.
-    updated = session_manager.get_session(session_id)
-    interview_complete = bool(updated and updated.status == "completed")
-
     return JSONResponse(
         {
             "status": "success",
@@ -451,7 +491,10 @@ async def submit_answer(
             "followup_depth": result.get("followup_depth", 0),
             "next_question": result.get("next_question"),
             "next_question_available": result.get("next_question_available", False),
-            "interview_complete": interview_complete,
+            # Read off the session object submit_answer already had in hand; this
+            # used to cost a third Redis GET per answer.
+            "interview_complete": result.get("interview_complete", False),
+            "turn": result.get("turn", 0),
         }
     )
 
@@ -532,8 +575,21 @@ async def get_report(
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint."""
-    return JSONResponse({"status": "healthy", "service": "InterviewAI"})
+    """Health check endpoint.
+
+    Exposes the evaluation parse-failure counter. That fallback path (a silent
+    hardcoded "good" rating when the model returns unparseable JSON) previously
+    produced one ``logger.warning`` and nothing else — there was no way to know
+    from outside the process that it was firing at all.
+    """
+    return JSONResponse(
+        {
+            "status": "healthy",
+            "service": "InterviewAI",
+            "session_store": "redis" if session_manager.session_store.client else "memory",
+            "evaluation_parse_failures": EVALUATION_PARSE_FAILURES["count"],
+        }
+    )
 
 
 @app.get("/api/session/{session_id}/scores")
@@ -578,7 +634,23 @@ async def get_comprehensive_report(
     interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
     db: Session = Depends(database.get_db),
 ):
-    """Get the full interview report with scores, analysis and improvements."""
+    """Get the full interview report with scores, analysis and improvements.
+
+    Served from the persisted ``report_data`` whenever one exists. That column
+    was written here and read by nothing, so a candidate who came back after the
+    6-hour Redis TTL got a 404 for a report that was sitting durably in
+    Postgres — and every refresh inside the TTL paid for a fresh improvement-plan
+    LLM call. Reading it back fixes both.
+    """
+    if interview.report_data:
+        return JSONResponse(
+            {
+                "status": "success",
+                "comprehensive_report": interview.report_data,
+                "source": "stored",
+            }
+        )
+
     session = _load_live_session(session_id)
 
     try:
@@ -618,32 +690,85 @@ async def get_comprehensive_report(
     return JSONResponse({"status": "success", "comprehensive_report": comprehensive_report})
 
 
-class EndSessionRequest(BaseModel):
-    score: float = Field(..., ge=0, le=100)
+@app.post("/api/session/{session_id}/attention")
+async def report_attention(
+    session_id: str,
+    report: AttentionReport,
+    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    current_user: db_models.User = Depends(rate_limit.answer_rate_limit),
+):
+    """Record the browser's attention measurements for this interview.
+
+    Deliberately client-reported. The browser runs MediaPipe FaceMesh on every
+    frame at camera rate and computes gaze from iris position between the eye
+    corners; the server previously ran a second, coarser estimate (nose position
+    within the face bounding box) on one 320x240 frame every three seconds,
+    purely so the number would be server-attested. Nothing in this product acts
+    on that number adversarially, so the better measurement is worth more than
+    the weaker attestation.
+
+    These values are presented as feedback and never touch the integrity
+    penalty, which stays sourced from the server's own YOLO verdicts.
+
+    Totals are cumulative, so they are written with HSET rather than HINCRBY —
+    a resend settles on the same value instead of inflating it.
+    """
+    try:
+        session_manager.session_store.set_proctoring(
+            session_id,
+            {
+                "attention_samples": report.samples,
+                "attentive_samples": min(report.attentive_samples, report.samples),
+                "look_away_events": report.look_away_events,
+                "look_away_seconds": report.look_away_seconds,
+                "no_face_events": report.no_face_events,
+            },
+        )
+    except Exception as exc:
+        # Feedback data is supplementary; never fail the request over it.
+        logger.warning("Could not record attention for %s: %s", session_id, exc)
+        return JSONResponse({"status": "error"}, status_code=202)
+
+    return JSONResponse({"status": "success"})
 
 
 @app.post("/api/session/{session_id}/end")
 async def end_session(
     session_id: str,
-    request: EndSessionRequest,
     interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
     db: Session = Depends(database.get_db),
 ):
-    """Mark an interview completed in the session store and the database."""
+    """Mark an interview completed and store the server's own final score.
+
+    This endpoint used to take ``{"score": <float 0-100>}`` from the browser and
+    write it straight to ``interviews.score``, overwriting the number
+    ``/comprehensive-report`` had just computed from the real evaluations. The
+    range check (ge=0, le=100) validated the shape of a value that should never
+    have crossed the trust boundary at all — anyone could POST a 100. The score
+    is now computed here, from evaluations and server-observed proctoring only.
+    """
     session = session_manager.get_session(session_id)
+
+    final_score = interview.score
     if session:
         session.status = "completed"
         session_manager.session_store.set(session_id, session)
+        try:
+            scores = session_manager.calculate_interview_score(session_id)
+            final_score = scores.get("overall_score", final_score)
+        except Exception as exc:
+            logger.warning("Could not compute final score for %s: %s", session_id, exc)
 
     try:
         interview.status = "completed"
-        interview.score = request.score
+        if final_score is not None:
+            interview.score = final_score
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
         raise _fail(500, "Could not end the interview session.", exc, "End session")
 
-    return {"status": "success"}
+    return {"status": "success", "score": final_score}
 
 
 # ---------------------------------------------------------------------------
@@ -652,7 +777,6 @@ async def end_session(
 
 _EMPTY_FRAME_RESPONSE = {
     "status": "error",
-    "face_analysis": {"status": "no_face"},
     "object_analysis": {"person_count": 1, "phone_detected": False, "warnings": []},
     "cheating_detected": False,
     "warnings": [],
@@ -680,57 +804,8 @@ def _decode_frame(frame_bytes: bytes):
     return cv2.flip(img, 1)
 
 
-def _looking_away(face_landmarks) -> bool:
-    """Estimate gaze direction from nose position within the face bounding width.
-
-    The previous analyze-frame check compared the raw nose x against fixed 0.2/0.8
-    thresholds, which flagged anyone sitting off-centre in the webcam rather than
-    anyone actually looking away.
-    """
-    try:
-        nose_x = face_landmarks.landmark[1].x
-        left_x = face_landmarks.landmark[234].x
-        right_x = face_landmarks.landmark[454].x
-        width = right_x - left_x
-        if width <= 0:
-            return False
-        ratio = (nose_x - left_x) / width
-        return ratio < 0.3 or ratio > 0.7
-    except (IndexError, AttributeError):
-        return False
-
-
-def _analyse_face(frame_img) -> dict:
-    result = {"status": "no_face", "faces_detected": 0, "looking_away": False}
-    try:
-        rgb = cv2.cvtColor(frame_img, cv2.COLOR_BGR2RGB)
-        with _face_mesh_lock:
-            results = get_face_mesh().process(rgb)
-
-        if results.multi_face_landmarks:
-            count = len(results.multi_face_landmarks)
-            result["faces_detected"] = count
-            result["face_count"] = count
-            if count > 1:
-                result["status"] = "multiple_faces"
-            else:
-                result["status"] = "face_detected"
-                result["looking_away"] = _looking_away(results.multi_face_landmarks[0])
-    except Exception as exc:
-        logger.warning("Face detection error: %s", exc)
-        result["status"] = "error"
-    return result
-
-
 _SUSPICIOUS_CLASSES = {
     "cell phone",
-    "laptop",
-    "book",
-    "bottle",
-    "cup",
-    "wine glass",
-    "remote",
-    "keyboard",
 }
 
 
@@ -787,21 +862,10 @@ def _analyse_frame_sync(frame_bytes: bytes) -> dict:
     if frame_img is None:
         return dict(_EMPTY_FRAME_RESPONSE)
 
-    face_result = _analyse_face(frame_img)
     object_result = _analyse_objects(frame_img)
 
     cheating_detected = False
     warnings: list[str] = []
-
-    if face_result.get("status") == "no_face":
-        cheating_detected = True
-        warnings.append("No face detected")
-    elif face_result.get("status") == "multiple_faces":
-        cheating_detected = True
-        warnings.append("Multiple faces detected")
-
-    if face_result.get("looking_away"):
-        warnings.append("Looking away from screen")
 
     if object_result.get("phone_detected"):
         cheating_detected = True
@@ -813,22 +877,61 @@ def _analyse_frame_sync(frame_bytes: bytes) -> dict:
 
     return {
         "status": "success",
-        "face_analysis": face_result,
         "object_analysis": object_result,
         "cheating_detected": cheating_detected,
         "warnings": warnings,
     }
 
 
+def _record_proctoring(session_id: str, result: dict) -> None:
+    """Persist the server's own object-detection verdict against the session.
+
+    Only YOLO's findings are recorded here, and they are the only proctoring
+    signals that remain server-verified: a phone in frame and a second person.
+    Attention (gaze, face presence) is measured in the browser and submitted
+    separately — see /api/session/{id}/attention — because the browser's
+    iris-based estimate is strictly better than anything computable from one
+    320x240 frame every three seconds, and nothing here depends on it being
+    server-attested.
+
+    Counters go to a separate Redis hash via HINCRBY so a frame arriving
+    mid-answer cannot clobber the session blob.
+    """
+    objects = result.get("object_analysis") or {}
+    fields = {
+        "frames_analysed": 1,
+        "phone_frames": 1 if objects.get("phone_detected") else 0,
+        "multiple_person_frames": 1 if objects.get("person_count", 1) > 1 else 0,
+    }
+    try:
+        session_manager.session_store.increment_proctoring(session_id, fields)
+    except Exception as exc:
+        # Proctoring is supplementary; never fail a frame over it.
+        logger.warning("Could not record proctoring for %s: %s", session_id, exc)
+
+
 @app.post("/api/analyze-frame")
 async def analyze_frame(
     frame: UploadFile = File(...),
-    current_user: db_models.User = Depends(auth.get_current_user),
+    session_id: Optional[str] = Form(None),
+    current_user: db_models.User = Depends(rate_limit.frame_rate_limit),
+    db: Session = Depends(database.get_db),
 ):
-    """Analyse a video frame for face and object detection."""
+    """Analyse a video frame for face and object detection.
+
+    ``session_id`` binds the frame to an interview the caller owns, so the
+    verdict is recorded server-side and can back the integrity penalty. It stays
+    optional so the endpoint remains usable standalone, but an unbound frame is
+    analysed and forgotten.
+    """
     frame_bytes = await _read_bounded(frame, _MAX_FRAME_BYTES, "Frame")
     if not frame_bytes:
         return JSONResponse(dict(_EMPTY_FRAME_RESPONSE))
+
+    if session_id:
+        # Reuse the same ownership rule as every other session route, including
+        # its 404-not-403 behaviour.
+        get_owned_interview(session_id=session_id, current_user=current_user, db=db)
 
     try:
         # CPU-bound inference must not run on the event loop; doing so blocked
@@ -840,38 +943,16 @@ async def analyze_frame(
         payload["warnings"] = ["Analysis unavailable"]
         return JSONResponse(payload)
 
+    if session_id:
+        _record_proctoring(session_id, result)
+
     return JSONResponse(result)
-
-
-@app.post("/api/detect-face")
-async def detect_face(
-    frame: UploadFile = File(...),
-    current_user: db_models.User = Depends(auth.get_current_user),
-):
-    """Detect faces in a video frame."""
-    frame_bytes = await _read_bounded(frame, _MAX_FRAME_BYTES, "Frame")
-
-    def _run():
-        img = _decode_frame(frame_bytes)
-        if img is None:
-            return None
-        return _analyse_face(img)
-
-    try:
-        result = await run_in_threadpool(_run)
-    except Exception as exc:
-        raise _fail(500, "Face detection failed", exc, "Face detection")
-
-    if result is None:
-        return JSONResponse({"status": "error", "message": "Invalid frame"}, status_code=400)
-
-    return JSONResponse({"status": "success", "face_detection": result})
 
 
 @app.post("/api/detect-objects")
 async def detect_objects(
     frame: UploadFile = File(...),
-    current_user: db_models.User = Depends(auth.get_current_user),
+    current_user: db_models.User = Depends(rate_limit.frame_rate_limit),
 ):
     """Detect objects (people, phones) in a video frame."""
     frame_bytes = await _read_bounded(frame, _MAX_FRAME_BYTES, "Frame")
@@ -896,7 +977,7 @@ async def detect_objects(
 @app.post("/api/transcribe-audio")
 async def transcribe_audio(
     audio: UploadFile = File(...),
-    current_user: db_models.User = Depends(auth.get_current_user),
+    current_user: db_models.User = Depends(rate_limit.audio_rate_limit),
 ):
     """Transcribe audio to text using Whisper."""
     audio_bytes = await _read_bounded(audio, _MAX_AUDIO_BYTES, "Audio")
@@ -935,7 +1016,7 @@ _VOICE_IDS = {v["id"] for v in _VOICES}
 async def generate_speech(
     text: str = Form(...),
     voice_id: str = Form("JBFqnCBsd6RMkjVDRZzb"),
-    current_user: db_models.User = Depends(auth.get_current_user),
+    current_user: db_models.User = Depends(rate_limit.tts_rate_limit),
 ):
     """Generate speech from text using ElevenLabs TTS."""
     client = get_elevenlabs_client()

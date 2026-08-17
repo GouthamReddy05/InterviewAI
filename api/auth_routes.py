@@ -7,7 +7,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from core import auth
+from core import auth, rate_limit
 from core.database import get_db
 from models import db_models
 
@@ -51,7 +51,11 @@ class Token(BaseModel):
 
 
 @router.post("/signup", response_model=Token, status_code=status.HTTP_201_CREATED)
-def signup(user: UserCreate, db: Session = Depends(get_db)):
+def signup(
+    user: UserCreate,
+    db: Session = Depends(get_db),
+    _: None = Depends(rate_limit.signup_rate_limit),
+):
     username = user.username.strip()
     email = str(user.email).strip().lower()
 
@@ -83,7 +87,11 @@ def signup(user: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+def login(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+    _: None = Depends(rate_limit.login_rate_limit),
+):
     user = (
         db.query(db_models.User)
         .filter(db_models.User.username == form_data.username.strip())
@@ -98,6 +106,22 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             headers={"WWW-Authenticate": "Bearer"},
         )
     access_token = auth.create_access_token(data={"sub": user.username})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.post("/refresh", response_model=Token)
+def refresh(current_user: db_models.User = Depends(auth.get_current_user)):
+    """Exchange a still-valid token for a fresh one.
+
+    Without this, an interview that ran past the access token's lifetime hit a
+    401 on the next answer submission, which the frontend turned into a full
+    logout: the token was cleared, resetState() ran, and the session id — the
+    only handle on a server-side session that was still alive in Redis for
+    hours — went with it. A 12-question interview with up to three follow-ups
+    each can plausibly outlast a fixed expiry, so the frontend now renews
+    proactively while the candidate is still authenticated.
+    """
+    access_token = auth.create_access_token(data={"sub": current_user.username})
     return {"access_token": access_token, "token_type": "bearer"}
 
 

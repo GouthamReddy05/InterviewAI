@@ -130,16 +130,33 @@ async function handleFileUpload(input) {
 
 
         state.tempExtracted = null;
+
+        // pdf.js can only read PDFs. This used to run over every file: a .docx
+        // threw, and the catch wrote a `Resume PDF: <filename>` placeholder that
+        // was non-empty, got sent, and was preferred by the server over its own
+        // DOCX extractor — so the interview was generated from a filename.
+        // DOCX now goes to the server, which walks the document's tables (where
+        // resumes keep skills and contact details).
+        if (!/\.pdf$/i.test(file.name)) {
+            state.resumeRawText = '';
+            console.info('Non-PDF upload; the server will extract the text.');
+            renderUpload();
+            return;
+        }
+
         state.resumeRawText = "Extracting text from PDF...";
         renderUpload();
-
 
         try {
             state.resumeRawText = await extractTextFromPDF(file);
             console.log("PDF parsed successfully. Characters:", state.resumeRawText.length);
         } catch (e) {
+            // A failed parse must leave this empty, not filled with a
+            // placeholder: empty is what makes the server fall back to its own
+            // extractor instead of interviewing the candidate about their
+            // filename.
             console.error("PDF parsing error", e);
-            state.resumeRawText = `Resume PDF: ${state.resumeFileName}. Candidate: ${state.candidateName}.`;
+            state.resumeRawText = '';
         }
 
         renderUpload();
@@ -157,7 +174,15 @@ async function uploadResumeToBackend() {
         const formData = new FormData();
         formData.append('resume', state.resumeFile);
         formData.append('job_role', state.jobRole);
-        if (state.resumeRawText) {
+        // The picker on the setup screen now reaches the generation prompt. It
+        // previously set browser state that nothing sent anywhere.
+        formData.append('difficulty', state.difficulty || 'medium');
+        // Only offered for PDFs. pdf.js used to be run over every file type; a
+        // .docx threw, the catch stored a "Resume PDF: <filename>" placeholder,
+        // and that non-empty string was sent and preferred by the server, so
+        // the interview was generated from a filename. The server rejects
+        // client text for non-PDFs now, but not sending it is clearer.
+        if (state.resumeRawText && /\.pdf$/i.test(state.resumeFileName || '')) {
             formData.append('resume_text', state.resumeRawText);
         }
 
@@ -167,6 +192,7 @@ async function uploadResumeToBackend() {
 
             state.sessionId = response.session_id;
             state.totalQuestions = response.total_questions;
+            state.turn = typeof response.turn === 'number' ? response.turn : 0;
 
 
             if (response.questions && response.questions.length > 0) {
@@ -242,9 +268,11 @@ async function extractTextFromPDF(file) {
 function startAnalysis() {
     if (!state.resumeFile || !state.jobRole) return;
 
+    // -> setup (difficulty). The upload no longer fires here: the questions are
+    // generated after the candidate has chosen an intensity, which is the whole
+    // reason that picker can now affect anything.
     state.step = 2;
     render();
-    simulateAnalysis();
 }
 
 

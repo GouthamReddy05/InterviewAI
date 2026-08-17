@@ -2,6 +2,28 @@
 Interview Question Generation Prompts
 """
 
+# The setup screen's Warm-up / Balanced / Stretch control used to set browser
+# state that was never sent anywhere — the questions had already been generated
+# by the time the screen was shown. The picker now runs before generation and
+# these directives are what it actually does.
+DIFFICULTY_DIRECTIVES = {
+    "easy": (
+        "WARM-UP: stay at or one step below the band ceiling. Favour "
+        "\"easy\" and \"intermediate\". Lead with definitional and "
+        "walk-me-through questions before anything requiring judgement. Do not "
+        "use \"expert\" at any band."
+    ),
+    "medium": (
+        "BALANCED: use the band ceiling as written above. A realistic mix of "
+        "recall, application and one or two judgement questions."
+    ),
+    "hard": (
+        "STRETCH: push to the top of the band and allow one step above it, but "
+        "never past \"advanced\" for a FRESHER. Favour trade-off, debugging and "
+        "ambiguous-scenario questions over definitional ones."
+    ),
+}
+
 QUESTION_GENERATION_PROMPT = """
 You are an experienced Technical Interviewer conducting a REAL, SPOKEN interview.
 
@@ -49,6 +71,14 @@ MID/SENIOR → "intermediate" through "expert" as appropriate.
 
 Do not escalate difficulty just to sound rigorous. A real interviewer matches the
 candidate.
+
+STEP 2b — APPLY THE CANDIDATE'S CHOSEN INTENSITY
+
+The candidate selected an intensity for this session. Apply it as an adjustment to
+the band ceiling above — it shifts the mix, it never overrides the band by more
+than one step:
+
+{difficulty_directive}
 
 --------------------------------------------------
 

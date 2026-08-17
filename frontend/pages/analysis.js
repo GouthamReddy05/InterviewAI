@@ -127,8 +127,8 @@ async function simulateAnalysis() {
         logMessage(`> [System] Setup complete. Proceeding...`, 'system');
 
         await new Promise(r => setTimeout(r, 1000));
-        state.step = 3;
-        render();
+        // Straight into the interview: the difficulty screen has already run.
+        startInterview();
 
     } catch (globalError) {
         logMessage(`> [System Error] Critical setup failure: ${globalError.message}`, 'error');

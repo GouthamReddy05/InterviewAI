@@ -3,7 +3,7 @@ Data Models for Interview System
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Any
+from typing import Any, List, Optional
 from datetime import datetime, timezone
 from enum import Enum
 
@@ -75,21 +75,72 @@ class AnswerEvaluation(BaseModel):
     improvements: List[str]
     missing_concepts: List[str] = []
     follow_up_direction: str
+    # True when the model's reply could not be parsed and the values below are a
+    # flow-control placeholder rather than a judgement. Scoring excludes these so
+    # a run of parse failures cannot inflate (or deflate) the final number.
+    unscored: bool = False
 
 
 class FollowUpQuestion(BaseModel):
+    """One evaluated turn in a follow-up thread.
+
+    ``question`` is always the question that ``candidate_answer`` answers. It
+    previously held the *next* question in the probing branch, which mispaired
+    every record except the last one in each thread.
+    """
+
     original_question_id: int
     depth: int
     question: str
     candidate_answer: str = ""
     evaluation: AnswerEvaluation
+    # The question generated after this turn, when the thread continued. Kept
+    # separate so it can never be mistaken for the question that was answered.
+    next_question: str = ""
     timestamp: datetime = Field(default_factory=_utcnow)
+
+
+class ProctoringStats(BaseModel):
+    """Server-observed proctoring counters for one interview.
+
+    Incremented by ``/api/analyze-frame`` from the server's own YOLO verdicts and
+    never accepted from the client. These are the only integrity signals that
+    remain server-verified, and the only ones the score penalises.
+    """
+
+    frames_analysed: int = 0
+    phone_frames: int = 0
+    multiple_person_frames: int = 0
+
+
+class AttentionReport(BaseModel):
+    """Attention counters measured in the browser and reported by it.
+
+    Deliberately client-sourced. The browser runs MediaPipe FaceMesh on every
+    frame at camera rate and derives gaze from iris position between the eye
+    corners — a finer measurement than anything recoverable from one 320x240
+    JPEG every three seconds, and it already tracks duration, which frame counts
+    cannot. Since nothing in this product acts on the number adversarially, the
+    better measurement is worth more than the weaker attestation.
+
+    Consequently these values are reported as feedback and never feed the
+    integrity penalty. Totals are cumulative, not deltas.
+    """
+
+    samples: int = Field(0, ge=0, description="Frames the browser analysed")
+    attentive_samples: int = Field(0, ge=0, description="Frames with gaze on screen")
+    look_away_events: int = Field(0, ge=0)
+    look_away_seconds: int = Field(0, ge=0)
+    no_face_events: int = Field(0, ge=0)
 
 
 class InterviewSession(BaseModel):
     session_id: str
     resume_name: str
     job_role: str
+    # Candidate-chosen difficulty band, applied as a ceiling override in the
+    # generation prompt. Was previously a UI-only setting that reached nothing.
+    difficulty: str = "medium"
     extracted_profile: dict = {}
     questions: List[InterviewQuestion]
     current_question_index: int = 0
@@ -98,6 +149,10 @@ class InterviewSession(BaseModel):
     current_followup_depth: int = 0
     max_followup_depth: int = 3
     current_followup_question: str = ""
+    # Consecutive "poor" ratings in the current thread. Two in a row ends the
+    # thread, so the loop terminates on certainty in either direction rather
+    # than only on success.
+    consecutive_poor: int = 0
 
     answers: List[CandidateAnswer] = []
     follow_ups: List[FollowUpQuestion] = []
@@ -106,6 +161,11 @@ class InterviewSession(BaseModel):
     conversation_history: str = ""
     # Legacy field kept for older serialized sessions; unused.
     memory: Any = None
+
+    # Monotonic turn counter. The client echoes it back on submit so a duplicate
+    # or replayed submission is rejected before any LLM call, instead of two
+    # concurrent read-modify-writes silently losing one answer.
+    turn: int = 0
 
     created_at: datetime = Field(default_factory=_utcnow)
     status: str = "in_progress"
@@ -145,6 +205,10 @@ class AnswerSubmissionRequest(BaseModel):
     # Bounded so a hostile or runaway client cannot push an unbounded prompt
     # into the LLM call. 20k chars is far above any realistic spoken answer.
     answer: str = Field(..., min_length=1, max_length=20000)
+    # Which turn this answer is for. Omitted by older clients, in which case the
+    # idempotency check is skipped and the previous last-write-wins behaviour
+    # applies; the bundled frontend always sends it.
+    turn: Optional[int] = None
 
 
 class FollowUpResponse(BaseModel):

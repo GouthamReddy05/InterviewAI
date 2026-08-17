@@ -28,7 +28,12 @@ class Settings(BaseSettings):
         description="Secret key for signing JWTs",
     )
     jwt_algorithm: str = Field(default="HS256", description="Algorithm for JWT encoding")
-    access_token_expire_minutes: int = Field(default=60, ge=1, description="JWT expiry in minutes")
+    # Was 60, which is inside the plausible length of a 12-question interview
+    # with up to three follow-ups each. Hitting the cliff mid-interview logged
+    # the candidate out and discarded the session id, so the still-live Redis
+    # session became unreachable. 480 sits comfortably past the 6-hour session
+    # TTL, and /api/auth/refresh renews it during long sessions.
+    access_token_expire_minutes: int = Field(default=480, ge=1, description="JWT expiry in minutes")
 
     groq_api_key: SecretStr = Field(..., description="Groq API key for LLM calls")
 

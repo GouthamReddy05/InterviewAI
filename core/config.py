@@ -1,17 +1,17 @@
+"""Derived constants. Everything configurable lives in core/settings.py.
+
+Removed here, because nothing read them: OPENAI_API_KEY / OPENAI_MODEL /
+OPENAI_TEMPERATURE (this app only ever used langchain-groq),
+QUESTIONS_PER_SKILL and its three siblings (from the deleted static question
+bank), MAX_SESSION_DURATION_HOURS (superseded by the Redis TTL) and
+UPLOAD_FOLDER (resumes are parsed in memory and discarded, so the directory was
+created at boot and never written to).
+"""
+
 import os
 
 from .settings import settings
 
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4-turbo")
-OPENAI_TEMPERATURE = float(os.getenv("OPENAI_TEMPERATURE", "0.7"))
-
-
-QUESTIONS_PER_SKILL = 4
-QUESTIONS_PER_PROJECT = 4
-QUESTIONS_PER_EXPERIENCE = 4
-QUESTIONS_PER_ACHIEVEMENT = 4
 
 # Cap primary questions used in a live session (generation prompt asks for 8-12).
 MAX_PRIMARY_QUESTIONS = 12
@@ -24,13 +24,14 @@ MAX_RESUME_CHARS = 40000
 MAX_TTS_CHARS = 5000
 
 
-MAX_SESSION_DURATION_HOURS = 2
-UPLOAD_FOLDER = "uploads"
 MAX_UPLOAD_SIZE_MB = settings.max_upload_size_mb
 MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 ALLOWED_RESUME_EXTENSIONS = {".pdf", ".docx"}
 
 
+# Wired into ChatGroq's constructor in services/question_generator.py. These
+# were defined and never imported, so the client ran on langchain-groq's
+# defaults and an unbounded call could pin a threadpool worker.
 LLM_MAX_RETRIES = 3
 LLM_TIMEOUT_SECONDS = 60
 

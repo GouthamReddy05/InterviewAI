@@ -2,8 +2,9 @@
 
 function renderResults() {
     const name = state.candidateName || 'Candidate';
-    const m    = state.metrics;
-    const stats = state.cheatingStats;
+    // state.metrics / state.cheatingStats are the live in-interview estimate.
+    // They are deliberately not read on this page any more: everything below
+    // comes from the report the server computed.
 
 
     if (!state.reportData && state.sessionId) {
@@ -28,25 +29,16 @@ function renderResults() {
                     || { strengths: [], weaknesses: [] }
             });
 
-            let baseScore = (
-                (m.technicalScore * 0.35) +
-                (m.communicationScore * 0.20) +
-                (m.confidenceScore * 0.15) +
-                (m.eyeContactScore * 0.15) +
-                (m.resumeKnowledge * 0.10) +
-                (m.problemSolving * 0.05)
-            ) * 10;
-
-            let penalty = 0;
-            if (stats.mobileDetectedCount > 0) penalty += 15;
-            if (stats.multipleFacesCount > 0) penalty += 10;
-            if (stats.lookedAwayCount > 5) penalty += 5;
-
-            const overall = Math.max(0, Math.round(baseScore - penalty));
-
+            // The score is the server's, computed from the real per-answer
+            // evaluations and the frames the server itself judged. The browser
+            // used to compute a weighted formula over its own live metrics,
+            // subtract integrity penalties it counted itself, and POST the
+            // result to /end — which overwrote the backend number that
+            // /comprehensive-report had just written. The scoring policy was
+            // therefore editable in devtools. /end now takes no score at all.
             if (!state.sessionEnded && state.sessionId) {
                 state.sessionEnded = true;
-                API.endSession(state.sessionId, overall).catch(err => console.error("Failed to save final score", err));
+                API.endSession(state.sessionId).catch(err => console.error("Failed to end session", err));
             }
 
             renderResults();
@@ -65,6 +57,17 @@ function renderResults() {
 
     const plan = (state.reportData && state.reportData.improvement_plan) ? state.reportData.improvement_plan : { strengths: [], weaknesses: [] };
 
+    // Server metrics, on a 0-100 scale. `metrics` used to be fetched and then
+    // ignored — only improvement_plan was read out of the report, and every
+    // ring and bar on this page rendered browser state instead.
+    const server = (state.reportData && state.reportData.metrics) || {};
+    const proctoring = server.proctoring || {};
+    // Browser-measured, shown as feedback. It is deliberately not one of the
+    // scored components: the server no longer computes gaze, and a number the
+    // client supplies should inform the candidate, not grade them.
+    const attention = server.attention || {};
+    const toTen = v => (typeof v === 'number' ? Math.round((v / 10) * 10) / 10 : null);
+
 
     const strengthsHtml = plan.strengths && plan.strengths.length > 0
         ? plan.strengths.map(s => _planItemEnhanced('emerald', s)).join('')
@@ -76,22 +79,14 @@ function renderResults() {
         : _planItemEnhanced('indigo', 'Insufficient conversational data to map growth areas.');
 
 
-    let baseScore = (
-        (m.technicalScore * 0.35) +
-        (m.communicationScore * 0.20) +
-        (m.confidenceScore * 0.15) +
-        (m.eyeContactScore * 0.15) +
-        (m.resumeKnowledge * 0.10) +
-        (m.problemSolving * 0.05)
-    ) * 10;
-
-
-    let penalty = 0;
-    if (stats.mobileDetectedCount > 0) penalty += 15;
-    if (stats.multipleFacesCount > 0) penalty += 10;
-    if (stats.lookedAwayCount > 5) penalty += 5;
-
-    const overall = Math.max(0, Math.round(baseScore - penalty));
+    const penalty = typeof server.integrity_penalty === 'number' ? server.integrity_penalty : 0;
+    // A percentage, not a mean. The server weights each measurable component and
+    // redistributes the weight of anything it could not measure across the rest,
+    // so this is always "percent of the criteria that were actually assessed"
+    // and two candidates are comparable even when one had no camera.
+    const overall = typeof server.overall_score === 'number' ? Math.round(server.overall_score) : 0;
+    const basis = server.score_basis || {};
+    const basisCount = Array.isArray(basis.components) ? basis.components.length : 0;
     const overallGrade = overall >= 90 ? 'A+' : overall >= 80 ? 'A' : overall >= 70 ? 'B' : overall >= 60 ? 'C' : 'F';
 
     let gradeGlow = 'shadow-success-500/50';
@@ -109,13 +104,12 @@ function renderResults() {
     }
 
     const scoreItems = [
-        { label: 'Technical Accuracy', score: m.technicalScore, max: 10, bg: 'bg-indigo-500' },
-        { label: 'Communication', score: m.communicationScore, max: 10, bg: 'bg-emerald-500' },
-        { label: 'Speech Confidence', score: m.confidenceScore, max: 10, bg: 'bg-amber-500' },
-        { label: 'Eye Contact', score: m.eyeContactScore, max: 10, bg: 'bg-cyan-500' },
-        { label: 'Resume Validation', score: m.resumeKnowledge, max: 10, bg: 'bg-violet-500' },
-        { label: 'Problem Solving', score: m.problemSolving, max: 10, bg: 'bg-rose-500' }
-    ];
+        { label: 'Technical Accuracy', score: toTen(server.technical_score), max: 10, bg: 'bg-indigo-500' },
+        { label: 'Communication', score: toTen(server.communication_score), max: 10, bg: 'bg-emerald-500' },
+        { label: 'Speech Confidence', score: toTen(server.confidence_score), max: 10, bg: 'bg-amber-500' },
+        { label: 'Resume Validation', score: toTen(server.resume_alignment_score), max: 10, bg: 'bg-violet-500' },
+        { label: 'Problem Solving', score: toTen(server.problem_solving_score), max: 10, bg: 'bg-rose-500' }
+    ].filter(item => item.score !== null);
 
     app.innerHTML = `
     <div class="ia-page font-sans selection:bg-blue-200/60 overflow-x-hidden relative">
@@ -150,13 +144,15 @@ function renderResults() {
                                     class="transition-all duration-1500 ease-out" />
                             </svg>
                             <div class="absolute inset-0 flex flex-col items-center justify-center">
-                                <span class="text-6xl font-bold text-slate-950 tracking-tight">${overall}</span>
-                                <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500 mt-1">/ 100</span>
+                                <span class="text-6xl font-bold text-slate-950 tracking-tight">${overall}<span class="text-3xl align-top">%</span></span>
+                                <span class="text-[10px] font-mono uppercase tracking-widest text-slate-500 mt-1">Overall</span>
                             </div>
                         </div>
 
                         <h2 class="text-xl font-semibold mb-2 text-slate-950">Grade ${overallGrade}</h2>
-                        <p class="text-sm text-slate-600 leading-relaxed max-w-xs">Aggregated evaluation covering technical, communication, and problem-solving skills.</p>
+                        <p class="text-sm text-slate-600 leading-relaxed max-w-xs">
+                            Weighted percentage across ${basisCount || 4} assessed criteria: technical accuracy, communication, confidence and resume alignment.
+                        </p>
                     </div>
                 </div>
 
@@ -175,24 +171,30 @@ function renderResults() {
                         </div>
                         <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
                             <div class="ia-card-soft p-4">
-                                <div class="text-2xl font-bold text-slate-950 mb-1">${stats.mobileDetectedCount}</div>
-                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Phones Spotted</div>
+                                <div class="text-2xl font-bold text-slate-950 mb-1">${proctoring.phone_frames || 0}</div>
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Phone Frames</div>
                             </div>
                             <div class="ia-card-soft p-4">
-                                <div class="text-2xl font-bold text-slate-950 mb-1">${stats.multipleFacesCount}</div>
-                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Extra Persons</div>
+                                <div class="text-2xl font-bold text-slate-950 mb-1">${proctoring.multiple_person_frames || 0}</div>
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Extra-Person Frames</div>
                             </div>
                             <div class="ia-card-soft p-4">
-                                <div class="text-2xl font-bold text-slate-950 mb-1">${stats.lookedAwayCount}</div>
-                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Look Aways</div>
+                                <div class="text-2xl font-bold text-slate-950 mb-1">${attention.reported ? attention.look_away_events : '—'}</div>
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Look-Aways</div>
                             </div>
                             <div class="ia-card-soft p-4">
-                                <div class="text-2xl font-bold text-slate-950 mb-1">${stats.secondsLookedAway > 0 && m.eyeContactScore < 5 ? 12 : 0}s</div>
-                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Camera Exits</div>
+                                <div class="text-2xl font-bold text-slate-950 mb-1">${proctoring.frames_analysed || 0}</div>
+                                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-mono">Frames Analysed</div>
                             </div>
                         </div>
                         ${penalty > 0
                             ? `<div class="mt-4 text-xs text-rose-700 bg-rose-50 p-3 rounded-lg border border-rose-100">Integrity penalty applied: -${penalty} points deducted from final score.</div>`
+                            : ''}
+                        ${attention.reported
+                            ? `<div class="mt-4 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200"><strong>Attention (self-measured):</strong> on screen ${attention.on_screen_percentage}% of the time · ${attention.look_away_events} look-aways totalling ${attention.look_away_seconds}s${attention.no_face_events ? ` · left frame ${attention.no_face_events} times` : ''}. Measured in your browser and shown as feedback — it does not affect your score.</div>`
+                            : `<div class="mt-4 text-xs text-slate-600 bg-slate-50 p-3 rounded-lg border border-slate-200">No attention data was recorded for this session.</div>`}
+                        ${server.unscored_evaluations > 0
+                            ? `<div class="mt-4 text-xs text-amber-800 bg-amber-50 p-3 rounded-lg border border-amber-100">${server.unscored_evaluations} answer(s) could not be automatically evaluated and were excluded from the score.</div>`
                             : ''}
                     </div>
 

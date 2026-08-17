@@ -90,11 +90,16 @@ const API = {
     },
 
 
-    async submitAnswer(sessionId, answer) {
+    async submitAnswer(sessionId, answer, turn) {
+        // `turn` makes the submission idempotent: the server rejects a turn it
+        // has already consumed with a 409, before either LLM call, instead of
+        // letting two concurrent read-modify-writes lose an answer.
+        const payload = { answer };
+        if (typeof turn === 'number') payload.turn = turn;
         return this._request(`/session/${encodeURIComponent(sessionId)}/answer`, {
             method: 'POST',
             json: true,
-            body: JSON.stringify({ answer })
+            body: JSON.stringify(payload)
         });
     },
 
@@ -121,12 +126,24 @@ const API = {
     },
 
 
-    async endSession(sessionId, finalScore) {
+    /**
+     * Report the browser's attention totals. Cumulative, so a dropped report is
+     * harmless — the next one carries the same running values.
+     */
+    async reportAttention(sessionId, stats) {
+        return this._request(`/session/${encodeURIComponent(sessionId)}/attention`, {
+            method: 'POST',
+            json: true,
+            body: JSON.stringify(stats)
+        });
+    },
+
+    async endSession(sessionId) {
+        // No score parameter. The browser used to compute the final number and
+        // POST it here, overwriting the server's own. The server computes it.
         try {
             return await this._request(`/session/${encodeURIComponent(sessionId)}/end`, {
-                method: 'POST',
-                json: true,
-                body: JSON.stringify({ score: finalScore })
+                method: 'POST'
             });
         } catch (error) {
             console.error('End session error:', error);
@@ -134,31 +151,61 @@ const API = {
         }
     },
 
-
-
-
-
-
-    async detectFace(frameBlob) {
-        const formData = new FormData();
-        formData.append('frame', frameBlob, 'frame.jpg');
-
+    /**
+     * Renew the access token while the candidate is still authenticated.
+     *
+     * A fixed expiry hit mid-interview produced a 401, which handleUnauthorized
+     * turned into a full logout — clearing the session id and stranding a
+     * server-side session that was still alive in Redis for hours.
+     */
+    async refreshToken() {
         try {
-            const response = await fetch(`${this.BASE_URL}/detect-face`, {
+            const response = await fetch(`${this.BASE_URL}/auth/refresh`, {
                 method: 'POST',
-                headers: this.getHeaders(),
-                body: formData
+                headers: this.getHeaders()
             });
-            return await response.json();
+            if (!response.ok) return false;
+            const data = await response.json();
+            if (data && data.access_token) {
+                localStorage.setItem('interviewai_token', data.access_token);
+                return true;
+            }
         } catch (error) {
-            console.error('Face detection error:', error);
-            return {
-                status: 'error',
-                face_detection: { status: 'error' }
-            };
+            console.warn('Token refresh failed', error);
+        }
+        return false;
+    },
+
+    /** Seconds until the stored token expires, or null when unreadable. */
+    tokenSecondsRemaining() {
+        const token = localStorage.getItem('interviewai_token');
+        if (!token) return null;
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        try {
+            const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+            if (!payload || typeof payload.exp !== 'number') return null;
+            return payload.exp - Math.floor(Date.now() / 1000);
+        } catch (e) {
+            return null;
         }
     },
 
+    /** Refresh when less than `thresholdSeconds` of token life is left. */
+    async refreshIfExpiringSoon(thresholdSeconds = 900) {
+        const remaining = this.tokenSecondsRemaining();
+        if (remaining !== null && remaining > 0 && remaining < thresholdSeconds) {
+            return this.refreshToken();
+        }
+        return false;
+    },
+
+
+
+
+
+
+    // detectFace removed: /api/detect-face is gone with the server's MediaPipe.
 
     async detectObjects(frameBlob) {
         const formData = new FormData();
@@ -181,9 +228,13 @@ const API = {
     },
 
 
-    async analyzeFrame(frameBlob) {
+    async analyzeFrame(frameBlob, sessionId) {
         const formData = new FormData();
         formData.append('frame', frameBlob, 'frame.jpg');
+        // Binds the frame to an interview the caller owns, so the server can
+        // record its own verdict against the session instead of returning it
+        // and forgetting. The integrity penalty is computed from those counters.
+        if (sessionId) formData.append('session_id', sessionId);
 
         try {
             const response = await fetch(`${this.BASE_URL}/analyze-frame`, {

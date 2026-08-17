@@ -75,7 +75,7 @@ function renderInterviewSetup() {
                             ${['Resume-aware prompts', 'Live voice or text answers', 'Performance feedback'].map(item => `<div class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i>${item}</div>`).join('')}
                         </div>
                     </div>
-                    <button onclick="startInterview()" class="w-full mt-6 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2">Start interview <i data-lucide="arrow-up-right" class="w-4 h-4"></i></button>
+                    <button onclick="beginSession()" class="w-full mt-6 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white py-3.5 text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20 flex items-center justify-center gap-2">Start interview <i data-lucide="arrow-up-right" class="w-4 h-4"></i></button>
                 </aside>
             </div>
         </main>
@@ -87,4 +87,18 @@ function renderInterviewSetup() {
 function selectDifficulty(diff) {
     state.difficulty = diff;
     renderInterviewSetup();
+}
+
+/**
+ * Confirm the setup and generate the interview.
+ *
+ * This button used to call startInterview() directly, because the questions had
+ * already been generated on the previous screen. It now moves to the analysis
+ * step, which uploads the resume together with the chosen difficulty and only
+ * then enters the interview.
+ */
+function beginSession() {
+    state.step = 3;
+    render();
+    simulateAnalysis();
 }

@@ -1,0 +1,43 @@
+# Keep the build context small and, more importantly, keep secrets and local
+# state out of the image entirely.
+
+# Secrets — these must come from the runtime environment, never a layer.
+.env
+.env.local
+*.pem
+
+# Local Python state
+venv/
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+pytest.ini
+tests/
+
+# VCS and editor
+.git/
+.gitignore
+.DS_Store
+**/.DS_Store
+
+# Node — only ever held a stray jsdom dependency
+node_modules/
+package-lock.json
+
+# Runtime artifacts
+uploads/
+*.log
+
+# Documentation and prep material: not needed to serve the app
+*.md
+interview-guide.html
+interview-prep.html
+
+# Standalone prototypes. These open a webcam or microphone and loop; only
+# ml/extract_text.py and ml/yolov8n.pt are imported by the application.
+ml/face_detection.py
+ml/object_detection.py
+ml/realtimetrans.py
+ml/tts.py

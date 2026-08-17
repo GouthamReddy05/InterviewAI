@@ -5,6 +5,8 @@ let faceMesh = null;
 let cameraInstance = null;
 let cvAnimationId = null;
 let cheatCheckInterval = null;
+let tokenRefreshInterval = null;
+let attentionInterval = null;
 let lookAwaySeconds = 0;
 let silenceSeconds = 0;
 let recordingStartTime = 0;
@@ -30,11 +32,14 @@ async function startInterview() {
     state.evaluations     = [];
     state.cheatingStats   = { lookedAwayCount: 0, multipleFacesCount: 0, mobileDetectedCount: 0, secondsLookedAway: 0 };
     state.simulations     = { lookAway: false, noFace: false, multipleFaces: false, phoneUsage: false };
+    state.attention       = { samples: 0, attentiveSamples: 0, lookAwayEvents: 0, lookAwaySeconds: 0, noFaceEvents: 0 };
 
     render();
     initSpeechRecognition();
     startInterviewFlow();
     startRealtimeSimulation();
+    startTokenRefresh();
+    startAttentionReporting();
 
 
     setTimeout(() => {
@@ -86,7 +91,9 @@ function initMediaPipe() {
 
 
             if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {
+                state.attention.samples++;
                 if (!state.simulations.noFace) {
+                    state.attention.noFaceEvents++;
                     state.simulations.noFace = true;
                     const warningMsg = 'Face missing. Return to the camera viewport.';
                     if (!state.warnings.includes(warningMsg)) {
@@ -153,9 +160,15 @@ function initMediaPipe() {
                         const irisRatio = Math.abs(iris.x - outerCorner.x) / eyeWidth;
 
 
+                        // Every evaluated frame is a sample. These totals are
+                        // what /api/session/{id}/attention reports; the server
+                        // no longer computes gaze itself.
+                        state.attention.samples++;
                         if (irisRatio < 0.30 || irisRatio > 0.70) {
+                            if (!state.simulations.lookAway) state.attention.lookAwayEvents++;
                             state.simulations.lookAway = true;
                         } else {
+                            state.attention.attentiveSamples++;
                             state.simulations.lookAway = false;
                         }
                     }
@@ -398,9 +411,20 @@ function stopRecording() {
 
                 try {
                     const response = await API.transcribeAudio(audioBlob);
-                    if (response.status === 'success' && response.transcription && response.transcription.text) {
-                        state.transcript = response.transcription.text;
-                        if (input) input.value = state.transcript;
+                    const t = response && response.transcription;
+                    // The overwrite used to be unconditional, so a worse Whisper
+                    // pass silently destroyed what Web Speech had already
+                    // produced and the candidate had to retype. The confidence
+                    // value was in the response and ignored; it is now the gate.
+                    const confidence = t && typeof t.confidence === 'number' ? t.confidence : 1;
+                    const whisperText = t && typeof t.text === 'string' ? t.text.trim() : '';
+                    const liveText = (input && input.value.trim()) || state.transcript || '';
+
+                    if (whisperText && (confidence >= 0.6 || !liveText)) {
+                        state.transcript = whisperText;
+                        if (input) input.value = whisperText;
+                    } else if (whisperText && liveText) {
+                        console.info('Keeping live transcript; Whisper confidence', confidence);
                     }
                 } catch (err) {
                     console.error("Backend transcription failed", err);
@@ -582,6 +606,7 @@ function startRealtimeSimulation() {
 
         if (state.simulations.lookAway) {
             lookAwaySeconds++;
+            state.attention.lookAwaySeconds++;
             state.cheatingStats.secondsLookedAway++;
             state.metrics.eyeContactScore = Math.max(1.0, (state.metrics.eyeContactScore - 0.7).toFixed(1));
 
@@ -648,6 +673,59 @@ function startRealtimeSimulation() {
 }
 
 
+/**
+ * Renew the access token while the interview is running.
+ *
+ * A fixed token expiry hit mid-interview produced a 401 on the next answer
+ * submission, which handleUnauthorized turned into a full logout: the token was
+ * cleared, resetState() ran, and the session id went with it — stranding a
+ * server-side session that was still alive in Redis for hours with no
+ * "reconnect to session" path to recover it.
+ */
+/**
+ * Send the browser's attention totals to the server.
+ *
+ * Deliberately client-reported: the server no longer runs MediaPipe, because
+ * the browser's iris-based estimate is a better measurement than the
+ * nose-in-bounding-box approximation the server computed once every three
+ * seconds. Totals are cumulative and written with HSET server-side, so a
+ * resend is idempotent and a dropped report costs nothing.
+ */
+function reportAttention() {
+    if (!state.sessionId || !state.attention.samples) return;
+    API.reportAttention(state.sessionId, {
+        samples: state.attention.samples,
+        attentive_samples: state.attention.attentiveSamples,
+        look_away_events: state.attention.lookAwayEvents,
+        look_away_seconds: state.attention.lookAwaySeconds,
+        no_face_events: state.attention.noFaceEvents
+    }).catch(() => {});
+}
+
+function startAttentionReporting() {
+    if (attentionInterval) clearInterval(attentionInterval);
+    attentionInterval = setInterval(() => {
+        if (!state.interviewActive) {
+            clearInterval(attentionInterval);
+            attentionInterval = null;
+            return;
+        }
+        reportAttention();
+    }, 30000);
+}
+
+function startTokenRefresh() {
+    if (tokenRefreshInterval) clearInterval(tokenRefreshInterval);
+    tokenRefreshInterval = setInterval(() => {
+        if (!state.interviewActive) {
+            clearInterval(tokenRefreshInterval);
+            tokenRefreshInterval = null;
+            return;
+        }
+        API.refreshIfExpiringSoon().catch(() => {});
+    }, 5 * 60 * 1000);
+}
+
 function startFrameAnalysis() {
     frameAnalysisInterval = setInterval(async () => {
         if (!state.interviewActive) {
@@ -669,45 +747,14 @@ function startFrameAnalysis() {
             const frameBlob = await new Promise(resolve => offscreenCanvas.toBlob(resolve, 'image/jpeg', 0.6));
             if (frameBlob) {
 
-                const result = await API.analyzeFrame(frameBlob);
+                const result = await API.analyzeFrame(frameBlob, state.sessionId);
 
-                    const faceAnalysis = result.face_analysis;
+                    // face_analysis is gone from the response: the server no
+                    // longer runs MediaPipe. Face presence and gaze come from
+                    // the browser's own FaceMesh in initMediaPipe(), which
+                    // already sets these warnings at camera rate rather than
+                    // once every three seconds.
                     const objectAnalysis = result.object_analysis;
-
-
-                    if (faceAnalysis && faceAnalysis.status !== 'skipped') {
-                        if (faceAnalysis.looking_away) {
-                            state.simulations.lookAway = true;
-                        }
-
-                        if (faceAnalysis.status === 'no_face') {
-                            if (!state.simulations.noFace) {
-                                state.simulations.noFace = true;
-                                const msg = 'Face missing. Return to the camera viewport.';
-                                if (!state.warnings.includes(msg)) {
-                                    state.warnings.unshift(msg);
-                                    showTopBanner('FACE NOT DETECTED');
-                                    updateWarningsList();
-                                }
-                            }
-                        } else if (faceAnalysis.status === 'multiple_faces') {
-                            if (!state.simulations.multipleFaces) {
-                                state.simulations.multipleFaces = true;
-                                const msg = 'Multiple people detected in frame!';
-                                if (!state.warnings.includes(msg)) {
-                                    state.warnings.unshift(msg);
-                                    showTopBanner('MULTIPLE PEOPLE DETECTED');
-                                    updateWarningsList();
-                                }
-                            }
-                        } else {
-
-                            state.simulations.noFace = false;
-                            state.simulations.multipleFaces = false;
-                            state.warnings = state.warnings.filter(w => !w.includes('Face missing') && !w.includes('Multiple people'));
-                            updateWarningsList();
-                        }
-                    }
 
                     if (objectAnalysis) {
                         state.simulations.phoneUsage = objectAnalysis.phone_detected || false;
@@ -882,6 +929,14 @@ function addMessage(sender, text) {
 
 
 async function submitAnswer() {
+    // The box submits on Enter and nothing disabled the button, so a
+    // double-Enter or an impatient double-click fired two submissions for the
+    // same turn. Server-side that was two read-modify-writes of the whole
+    // session where the second SET won, silently losing an answer, its
+    // evaluation and its follow-up. Guarding here stops the common case; the
+    // turn token below is what makes it safe rather than merely unlikely.
+    if (state.submitInFlight) return;
+
     if (state.isRecording) {
         await stopRecording();
     }
@@ -898,11 +953,36 @@ async function submitAnswer() {
 
     if (!answerText) return;
 
+    state.submitInFlight = true;
+    setComposerEnabled(false);
+
     state.transcript = '';
     addMessage('user', answerText);
 
     state.answers.push(answerText);
-    processAnswer(answerText);
+    try {
+        await processAnswer(answerText);
+    } finally {
+        state.submitInFlight = false;
+        setComposerEnabled(true);
+    }
+}
+
+/** Disable the input and send button while a submission is in flight. */
+function setComposerEnabled(enabled) {
+    const input = document.getElementById('textInput');
+    const send = document.getElementById('sendAnswerBtn');
+    if (input) {
+        input.disabled = !enabled;
+        input.placeholder = enabled
+            ? 'Click microphone to talk, or type your response here...'
+            : 'Evaluating your answer...';
+    }
+    if (send) {
+        send.disabled = !enabled;
+        send.classList.toggle('opacity-50', !enabled);
+        send.classList.toggle('pointer-events-none', !enabled);
+    }
 }
 
 async function processAnswer(userAnswer) {
@@ -917,8 +997,17 @@ async function processAnswer(userAnswer) {
     state.agentStatus.technicalEvaluator = 'analyzing';
 
     try {
-        const response = await API.submitAnswer(state.sessionId, userAnswer);
+        const response = await API.submitAnswer(state.sessionId, userAnswer, state.turn);
+        if (response.httpStatus === 409) {
+            // This turn was already accepted — a duplicate submission, not a
+            // failure. Drop it silently instead of alarming the candidate.
+            console.warn('Duplicate submission ignored for turn', state.turn);
+            state.agentStatus.technicalEvaluator = 'idle';
+            if (typing) typing.classList.add('hidden');
+            return;
+        }
         if (response.status !== 'success') throw new Error("Backend submission failed");
+        if (typeof response.turn === 'number') state.turn = response.turn;
 
         let evaluation = response.evaluation;
         const ratingMap = { poor: 4, fair: 6, good: 8, excellent: 9.5 };
@@ -1019,37 +1108,10 @@ async function processAnswer(userAnswer) {
 }
 
 
-function evaluateAnswerAgainstIdeal(candidateAnswer, questionObj) {
-    const text = candidateAnswer.toLowerCase();
-    const concepts = questionObj.concepts || [];
-    const mentioned = concepts.filter(c => text.includes(c.toLowerCase()));
-    const missing = concepts.filter(c => !mentioned.includes(c));
-
-    let completeness = 3.0;
-    if (concepts.length > 0) {
-        completeness = Math.round((mentioned.length / concepts.length) * 10);
-    }
-
-    const words = candidateAnswer.split(/\s+/).length;
-    let depth = words > 50 ? 9.0 : words > 25 ? 7.5 : 5.0;
-    let correctness = mentioned.length > 0 ? 5.0 + (mentioned.length / concepts.length) * 4.5 : 4.0;
-    const score = Math.round(((correctness + depth + completeness) / 3) * 10) / 10;
-
-    return {
-        question: questionObj.text,
-        candidateAnswer,
-        idealAnswer: questionObj.ideal,
-        concepts,
-        conceptsMentioned: mentioned,
-        missingConcepts: missing,
-        correctness: Math.round(correctness * 10) / 10,
-        depth: Math.round(depth * 10) / 10,
-        completeness: Math.round(completeness * 10) / 10,
-        score
-    };
-}
-
-
+// evaluateAnswerAgainstIdeal() lived here: the pre-LLM keyword-overlap scorer
+// that consumed the per-question `concepts` lists from the static bank in
+// data.js. Nothing has called it since evaluation moved to the backend, and the
+// concept lists it read are now always empty. Deleted along with the bank.
 
 function endInterview() {
     if (state.stream) {
@@ -1060,6 +1122,10 @@ function endInterview() {
     if (cvAnimationId) cancelAnimationFrame(cvAnimationId);
     if (cheatCheckInterval) clearInterval(cheatCheckInterval);
     if (frameAnalysisInterval) clearInterval(frameAnalysisInterval);
+    if (tokenRefreshInterval) { clearInterval(tokenRefreshInterval); tokenRefreshInterval = null; }
+    if (attentionInterval) { clearInterval(attentionInterval); attentionInterval = null; }
+    // Final flush before the report is generated, so it reflects the whole session.
+    reportAttention();
 
 
     if (cameraInstance) {
@@ -1181,7 +1247,7 @@ function _chatPanel(question) {
                 <input type="text" id="textInput" placeholder="Click microphone to talk, or type your response here..."
                     class="flex-1 bg-surface-950 border border-surface-800 rounded-xl px-4 py-2.5 text-white placeholder-surface-500 focus:outline-none focus:border-accent-600/50 text-[13px] transition-all"
                     onkeydown="if(event.key==='Enter')submitAnswer()">
-                <button onclick="submitAnswer()"
+                <button id="sendAnswerBtn" onclick="submitAnswer()"
                     class="w-10 h-10 rounded-xl bg-accent-600 hover:bg-accent-700 text-white flex items-center justify-center transition-all flex-shrink-0">
                     <i data-lucide="send" class="w-4 h-4"></i>
                 </button>
@@ -1193,7 +1259,11 @@ function _chatPanel(question) {
 
 function _questionInfo(question) {
     const header = state.isFollowUpActive ? 'FOLLOW-UP QUESTION' : 'CURRENT QUESTION';
-    const desc = question ? question.text : 'Preparing next question...';
+    // LLM output. The generation prompt is fed resume text the candidate fully
+    // controls (the file and the text are independent form fields), so a resume
+    // engineered to make the model echo markup lands here. Unescaped, that runs
+    // in a page whose JWT is in localStorage.
+    const desc = escapeHtml(question ? question.text : 'Preparing next question...');
     return `
     <div class="glass rounded-xl p-4 border border-surface-800">
         <div class="flex items-center gap-2 mb-2">
@@ -1250,7 +1320,7 @@ function _ragEvaluatorPanel() {
                 <div>
                     <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-1.5">Reference Ideal Answer</div>
                     <div class="text-slate-700 bg-slate-50 border border-slate-200 p-3 rounded-lg leading-relaxed text-[11px] max-h-24 overflow-y-auto">
-                        ${evalObj.idealAnswer || 'No reference answer available for this turn.'}
+                        ${escapeHtml(evalObj.idealAnswer || 'No reference answer available for this turn.')}
                     </div>
                 </div>
                 <div class="grid grid-cols-3 gap-3 text-center">
@@ -1272,13 +1342,13 @@ function _ragEvaluatorPanel() {
                     <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Concept Alignment</div>
                     <div class="flex flex-wrap gap-2">
                         ${(evalObj.conceptsMentioned || []).map(c => `
-                            <span class="bg-emerald-600 text-white text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">✓ ${c}</span>
+                            <span class="bg-emerald-600 text-white text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">✓ ${escapeHtml(c)}</span>
                         `).join('')}
                         ${(evalObj.missingConcepts || []).map(c => `
-                            <span class="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">Missing: ${c}</span>
+                            <span class="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">Missing: ${escapeHtml(c)}</span>
                         `).join('')}
                         ${(!(evalObj.conceptsMentioned || []).length && !(evalObj.missingConcepts || []).length)
-                            ? `<span class="text-slate-500 text-[10px]">${evalObj.feedback || 'Evaluation recorded.'}</span>`
+                            ? `<span class="text-slate-500 text-[10px]">${escapeHtml(evalObj.feedback || 'Evaluation recorded.')}</span>`
                             : ''}
                     </div>
                 </div>
@@ -1300,7 +1370,6 @@ function _warningsPanel() {
     return `
     <div class="glass rounded-xl p-4 border border-surface-800">
         <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Cheating Alerts</div>
-        </div>
         <div id="warningsList" class="space-y-2 max-h-32 overflow-y-auto">
             ${state.warnings.length === 0
                 ? `<div class="text-surface-600 text-xs italic">No active anomalies flagged</div>`
@@ -1324,7 +1393,6 @@ function _agentStatusPanel() {
     return `
     <div class="glass rounded-xl p-4 border border-surface-800">
         <div class="text-white text-xs font-semibold mb-3 uppercase tracking-wider font-mono">Running Agent Tasks</div>
-        </div>
         <div class="space-y-3">
             ${agents.map(a => {
                 const status = state.agentStatus[a.key] || 'idle';

@@ -1,96 +1,220 @@
 # InterviewAI
 
-An intelligent, AI-powered mock interview platform that simulates real-world job interviews. It uses computer vision, natural language processing, and real-time audio analysis to evaluate technical answers and physical presentation.
+An AI-powered mock interview platform. It reads a candidate's résumé, generates
+questions grounded in what that résumé actually shows, asks adaptive follow-ups,
+evaluates each answer, and produces a scored report — while a webcam feed is
+checked for a phone or a second person in frame.
 
-This repository contains a FastAPI backend with a vanilla HTML/JS frontend, plus integrations for embeddings, NLP, speech processing, and LLM-driven question generation.
+A single FastAPI process serves both the API and the frontend. There is no
+separate frontend server, no worker queue and no message broker.
 
-## 🚀 Project Overview
+---
 
-InterviewAI helps job seekers practice for interviews by:
+## How it works
 
-- Parsing resumes and extracting text to understand candidate background.
-- Generating tailored, context-aware interview questions based on the candidate's resume and job role.
-- Monitoring candidate presence and environment using face tracking and object detection during the interview.
-- Transcribing candidate answers in real-time and synthesizing interviewer speech.
-- Evaluating responses and providing comprehensive feedback on technical accuracy and communication skills.
+```
+upload résumé + role  ──▶  setup (difficulty)  ──▶  one Groq call generates 8–12 questions
+                                                              │
+                                                              ▼
+          report  ◀──  answer loop: evaluate ─▶ follow up or advance
+```
 
-## 📊 Data & Models
+Three stores, each with one job:
 
-Key components used:
+| Store | Holds |
+|---|---|
+| **Redis** | The live interview — questions, answers, evaluations, turn counter. 6-hour TTL. |
+| **Postgres** | Who owns the interview, and the finished report once generated. |
+| **Browser** | Real-time UX: the camera overlay, live transcript, attention measurement. |
 
-- Resume parsing: `pypdf2`, `python-docx`.
-- Computer Vision: `MediaPipe` (Face Detection), `YOLOv8` (Object Detection).
-- Speech Processing: `faster-whisper` (Speech-to-Text), `elevenlabs` (Text-to-Speech).
-- NLP/LLM/Reasoning: `langchain`, `langchain-google-genai`, `langchain_groq`, and OpenAI.
-- Database: Neon DB (Serverless PostgreSQL) for user and session data.
+---
 
-## 🛠 Tech Stack
+## Stack
 
-- Frontend: HTML, CSS, JavaScript (Vanilla JS)
-- Backend: Python, FastAPI, python-dotenv
-- AI/ML Models: OpenCV, MediaPipe, Ultralytics YOLOv8, Faster-Whisper, ElevenLabs, LangChain
-- Database: PostgreSQL (Neon DB) via SQLAlchemy & psycopg2
+| Layer | Choice | Why |
+|---|---|---|
+| API | FastAPI + Uvicorn | Async routing, Pydantic validation, `run_in_threadpool` for blocking ML calls |
+| LLM | Groq · `llama-3.3-70b-versatile` | Latency. Every turn is two sequential LLM calls, so per-token speed decides how the conversation *feels* |
+| Live state | Redis | Every answer rewrites the whole session blob 30–40 times a session — a `SET` that expires itself, not a large row update |
+| Records | Postgres + SQLAlchemy 2.x | Ownership and finished reports |
+| Auth | JWT (HS256) + bcrypt | Per-request DB lookup so `is_admin` is never trusted from the token |
+| Vision | YOLOv8n | Phone and extra-person detection — the only server-verified integrity signals |
+| Attention | Browser MediaPipe FaceMesh | Iris-based gaze at camera rate. Reported as feedback, never scored |
+| Speech in | Web Speech API + faster-whisper | Live interim transcript in-browser; the recorded clip re-transcribed server-side |
+| Speech out | ElevenLabs | Returns 503 when no key is set — no fallback key |
+| Frontend | Vanilla JS | One `state` object, a `switch` router over `state.step`, `innerHTML` rendering with explicit escaping |
 
-## 🚀 Quick Start (Development)
+**No embeddings, no vector store, no retrieval.** Evaluation is a single
+stateless prompt containing the question and the answer.
 
-1. Clone the repository
+---
+
+## Quick start
 
 ```bash
 git clone https://github.com/your-username/InterviewAI.git
 cd InterviewAI
-```
 
-2. Backend (FastAPI)
-
-```bash
 python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Download YOLOv8 model on first run
-python3 -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
-
-# Create a .env file in the project root (see examples below)
-
-# Run the FastAPI server (default host: 0.0.0.0, port: 8000)
-uvicorn app:app --reload --host 0.0.0.0 --port 8000
+cp .env.example .env              # then fill in GROQ_API_KEY and DATABASE_URL
+uvicorn app:app --reload --port 8000
 ```
 
-3. Frontend (development)
+Open <http://localhost:8000>.
 
-The frontend is served statically by the FastAPI backend. Just open your browser to:
+YOLO weights ship in the repo at `ml/yolov8n.pt` — no download step. The
+faster-whisper model (~460 MB) is fetched on the first transcription.
 
-```text
-http://localhost:8000
+Redis is optional in development: without it the app falls back to a
+process-local dict and logs a warning. In production an unreachable Redis
+**fails the boot** — the fallback is single-worker only and would silently lose
+interviews across workers.
+
+### Tests
+
+```bash
+python -m pytest        # 45 tests, no network, no models loaded
 ```
 
-## 🌍 Environment Variables
+---
 
-Create a `.env` file in the project root with the following keys (replace placeholders):
+## Configuration
 
-- DATABASE_URL=postgresql://<user>:<password>@<host>/<dbname>?sslmode=require  # Your Neon DB connection string
-- OPENAI_API_KEY=sk-...your-key...
-- ELEVENLABS_API_KEY=your-elevenlabs-key
+See `.env.example` (development) and `.env.production.example` (deployment).
+Required: `DATABASE_URL`, `GROQ_API_KEY`. Optional: `ELEVENLABS_API_KEY`
+(TTS is disabled without it), `REDIS_URL`.
 
-Add any other provider-specific keys your deployment requires (Groq API keys, Google Gemini keys, etc.).
+Configuration is validated at import, and a misconfigured production deploy
+**refuses to start** rather than running quietly insecure. With
+`ENVIRONMENT=production`, the app will not boot if:
 
-## 🌐 API Endpoints (examples)
+- `JWT_SECRET_KEY` is missing, weak, or under 32 characters
+- `DEBUG=true`
+- `CORS_ALLOW_ORIGINS` is `*`
+- Redis is unreachable
 
-- POST /api/auth/signup - User registration
-- POST /api/auth/login - User login
-- GET /api/health - Check service health
-- POST /api/upload-resume - Upload & process resume
-- GET /api/session/{session_id}/question - Get next interview question
-- POST /api/session/{session_id}/answer - Submit candidate answer
-- POST /api/analyze-frame - Real-time face tracking and analysis
-- POST /api/transcribe-audio - Convert speech to text
-- POST /api/generate-speech - Synthesize text to speech
+In development the JWT secret defaults to a *per-process random value*, so
+tokens do not survive a restart. That is deliberate — it makes a well-known
+signing key impossible to ship by accident.
 
-## 🚀 Example user flow
+---
 
-1. Sign up / Log in
-2. Upload resume and specify job role
-3. Begin mock interview session
-4. System asks questions verbally and candidate responds
-5. System tracks face and objects via webcam for focus metrics
-6. System evaluates response and provides detailed feedback and scoring
+## API
+
+**Auth** — `POST /api/auth/signup` · `POST /api/auth/login` ·
+`POST /api/auth/refresh` · `GET /api/auth/me`
+
+**Interview** — `POST /api/upload-resume` ·
+`POST /api/session/{id}/answer` · `GET /api/session/{id}/comprehensive-report` ·
+`POST /api/session/{id}/end` · `POST /api/session/{id}/attention`
+
+**Media** — `POST /api/analyze-frame` · `POST /api/transcribe-audio` ·
+`POST /api/generate-speech`
+
+**Ops** — `GET /api/health` (also reports the session-store mode and the
+evaluation parse-failure counter)
+
+Every `/api/session/{id}/*` route depends on `get_owned_interview`, which
+returns **404 rather than 403** when the caller does not own the session — 403
+would confirm the ID exists and turn the endpoint into an enumeration oracle.
+
+All endpoints that cost money or CPU are rate-limited: login, signup, upload,
+answer, frame analysis, transcription and TTS.
+
+---
+
+## Design decisions worth knowing
+
+**The final score is computed server-side and only server-side.**
+`POST /api/session/{id}/end` takes no request body. The score is derived from
+the real per-answer evaluations plus YOLO's own frame verdicts, as a weighted
+percentage over the components that could actually be measured.
+
+**Attention is measured in the browser and never scored.** The browser runs
+MediaPipe FaceMesh at camera rate with an iris-based gaze estimate — a better
+measurement than anything recoverable from one 320×240 JPEG every three seconds,
+and it tracks duration, which frame counts cannot. Because it is client-sourced
+it is presented as feedback and does not grade anyone. The integrity penalty is
+sourced only from YOLO.
+
+**Answer submissions are idempotent.** Each carries a turn token; a replayed or
+duplicated submission is rejected with a 409 *before* either LLM call, rather
+than two read-modify-writes silently losing an answer.
+
+**Unparseable evaluations are excluded from the score.** When the model returns
+JSON that cannot be parsed, the evaluation is tagged `unscored` — the fallback
+rating still drives interview flow, but the placeholder value never inflates the
+final number.
+
+**Résumé files are never written to disk.** They are parsed in memory and
+discarded.
+
+---
+
+## Deployment
+
+```bash
+cp .env.production.example .env.production   # then fill it in
+docker compose up --build
+```
+
+Brings up the app with Postgres and Redis. Notes baked into the image:
+
+- **CPU-only torch.** PyPI's default Linux wheel depends on ~2 GB of NVIDIA CUDA
+  packages that nothing here uses.
+- **`opencv-python-headless`.** The API calls only `imdecode`, `flip` and
+  `IMREAD_COLOR`; the regular wheel drags in X11 libraries and is the usual
+  cause of `ImportError: libGL.so.1` in a container.
+- **Whisper pre-baked** (`--build-arg BAKE_WHISPER=0` to skip), so a candidate's
+  first spoken answer does not stall on a model download.
+- **Single worker.** Sessions and rate limits live in Redis so more workers would
+  be correct, but each loads its own copy of torch and YOLO. Scale with more
+  containers, not more workers.
+
+Needs ~2 GB RAM. Free tiers generally will not fit torch plus Whisper.
+
+---
+
+## Known limitations
+
+Stated plainly rather than discovered later.
+
+1. **Prompt injection is unmitigated.** Résumé text goes verbatim into the
+   generation prompt. Field normalisation and output escaping contain the blast
+   radius, but a crafted résumé can still steer question content.
+2. **Escaping is per-call-site.** The known XSS sinks are fixed; the pattern that
+   allowed them is unchanged until rendering goes through an escape-by-default
+   tagged template.
+3. **Proctoring can be defeated by silence.** A client can stop uploading frames.
+   The scoring *policy* is not client-controlled, but detecting a quiet client
+   needs an expected-frame heartbeat.
+4. **No migrations.** `create_all()` builds the schema on first boot; a later
+   schema change will not apply to a live table.
+5. **Minimal observability.** One parse-failure counter on `/api/health`. No
+   metrics, no structured logs, no alerting.
+6. **Score weights are a judgement, not a calibration.** They are defensible but
+   were chosen, not derived from outcome data — and since communication,
+   confidence and résumé alignment are all derived from the technical score, the
+   effective weight on technical performance is far higher than its nominal 0.35.
+
+`FIXES_REPORT.md` documents the 26 defects found in a self-audit of this
+codebase and how each was fixed.
+
+---
+
+## Repository layout
+
+```
+app.py                    FastAPI app, routes, YOLO/Whisper/TTS handlers
+api/                      auth and admin routers
+core/                     settings, auth, database, Redis store, rate limiting
+models/                   SQLAlchemy tables and Pydantic schemas
+services/                 question generation, prompts, LLM JSON recovery
+ml/extract_text.py        PDF/DOCX text extraction (walks tables)
+ml/*.py                   standalone webcam/mic prototypes, not imported
+frontend/                 vanilla JS SPA served by the same process
+tests/                    45 tests — state machine, evaluation parsing, JSON recovery
+```

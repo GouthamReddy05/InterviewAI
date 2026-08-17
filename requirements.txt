@@ -5,8 +5,7 @@ python-multipart>=0.0.9
 jinja2>=3.1.4
 
 # Configuration & validation
-# pydantic>=1.7.0 was wrong: this codebase uses v2-only APIs
-# (model_validator, model_dump_json, field_validator).
+
 pydantic>=2.7.0,<3.0
 pydantic-settings>=2.3.0,<3.0
 email-validator>=2.1.0
@@ -33,16 +32,15 @@ python-docx>=1.1.0
 
 # Vision / speech (proctoring, transcription, TTS)
 numpy>=1.26.0,<3.0
-opencv-python>=4.9.0
-mediapipe>=0.10.14
+
+
+opencv-python-headless>=4.9.0,<5.0
+
 ultralytics>=8.2.0
+
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.2.0
+
 faster-whisper>=1.0.0
 elevenlabs>=1.0.0
 
-# Only needed by the standalone ml/realtimetrans.py demo script, not the API.
-# Uncomment if you run that file directly.
-# sounddevice>=0.4.6
-# silero-vad>=5.1
-
-# Removed: langchain, langchain-google-genai (never imported anywhere).

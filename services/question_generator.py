@@ -5,6 +5,7 @@ Question Generation and Interview Logic
 import json
 import logging
 import os
+import re
 import sys
 from typing import List, Optional, Tuple
 import uuid
@@ -32,13 +33,24 @@ from services.prompts import (
     QUESTION_GENERATION_PROMPT,
     FOLLOWUP_QUESTION_PROMPT,
     ANSWER_EVALUATION_PROMPT,
+    DIFFICULTY_DIRECTIVES,
 )
+from services.llm_json import extract_json_object
 from core.redis_session_store import RedisSessionStore
-from core.config import MAX_ANSWER_CHARS, MAX_PRIMARY_QUESTIONS
+from core.config import (
+    LLM_MAX_RETRIES,
+    LLM_TIMEOUT_SECONDS,
+    MAX_ANSWER_CHARS,
+    MAX_PRIMARY_QUESTIONS,
+)
 
 
 class QuestionGenerationError(RuntimeError):
     """Raised when the LLM cannot produce usable interview questions."""
+
+
+class StaleTurnError(ValueError):
+    """Raised when a submission targets a turn that has already been consumed."""
 
 
 RATING_TO_SCORE = {
@@ -56,12 +68,62 @@ RATING_TO_SCORE_10 = {
     "excellent": 9.5,
 }
 
+# Minimum viable observability for the silent-fallback path: without a counter,
+# a production run of unparseable evaluations is invisible from the outside.
+# Surfaced by /api/health.
+EVALUATION_PARSE_FAILURES = {"count": 0}
+
+# Weights for the overall percentage. They sum to 1.0 when every component is
+# available; when one cannot be measured its weight is redistributed across the
+# remainder in proportion, so the overall is always a percentage of the criteria
+# that were actually assessed rather than a mean over a varying number of terms.
+#
+# problem_solving_score is deliberately absent: it is a pure rescaling of the
+# technical score, so including it would count the same signal twice.
+#
+# eye_contact_score is absent too, and that is the substantive change. Attention
+# is now measured in the browser and reported by it, which makes it feedback
+# rather than evidence — so it is shown to the candidate but does not grade
+# them. Weights are renormalised over whatever is present, so removing it simply
+# redistributes its share across the four that remain.
+SCORE_WEIGHTS = {
+    "technical_score": 0.35,
+    "communication_score": 0.20,
+    "confidence_score": 0.15,
+    "resume_alignment_score": 0.15,
+}
+
+
+# Placeholder names a prompt template may legitimately contain. Anything else
+# left over after substitution is a typo, not JSON.
+_PLACEHOLDER_RE = re.compile(r"\{([a-z_][a-z0-9_]*)\}")
+
 
 def _fill_prompt(template: str, **kwargs) -> str:
-    """Replace {placeholders} without interpreting JSON example braces via str.format."""
+    """Replace {placeholders} without interpreting JSON example braces via str.format.
+
+    ``str.format`` cannot be used: these templates embed the JSON schema the
+    model must emit, so every example brace would be read as a replacement
+    field. Doubling the braces makes the prompts unreadable and breaks silently
+    for whoever edits them next.
+
+    The blind ``.replace`` that this used to be had no error when a key was
+    misspelled — a typo shipped a literal ``{resume_text}`` to the model and
+    nothing detected it. Leftovers are now logged.
+    """
     out = template
     for key, value in kwargs.items():
         out = out.replace("{" + key + "}", str(value))
+
+    leftover = {
+        name for name in _PLACEHOLDER_RE.findall(out) if name not in kwargs
+    }
+    if leftover:
+        logger.error(
+            "Prompt placeholders were never filled: %s. Check the template and "
+            "the caller's kwargs agree.",
+            ", ".join(sorted(leftover)),
+        )
     return out
 
 
@@ -77,6 +139,15 @@ def _category_label(category) -> str:
     return str(category)
 
 
+def _evaluation_dict(evaluation) -> dict:
+    if hasattr(evaluation, "model_dump"):
+        return evaluation.model_dump(mode="json")
+    data = evaluation.dict()
+    if hasattr(data.get("rating"), "value"):
+        data["rating"] = data["rating"].value
+    return data
+
+
 class InterviewQuestionGenerator:
     """Generate interview questions from resume using Llama3 LLM"""
 
@@ -90,20 +161,30 @@ class InterviewQuestionGenerator:
             groq_api_key=self.api_key,
             model="llama-3.3-70b-versatile",
             temperature=0.2,
-            max_tokens=8000
+            max_tokens=8000,
+            # Previously unset, so an unbounded call inside a threadpool worker
+            # could hold a request thread until the upstream gave up. These two
+            # constants had been sitting in core/config.py unread.
+            timeout=LLM_TIMEOUT_SECONDS,
+            max_retries=LLM_MAX_RETRIES,
         )
 
     def generate_questions(
         self,
         resume_text: str,
         job_role: str = "Software Engineer",
+        difficulty: str = "medium",
     ) -> Tuple[List[InterviewQuestion], dict]:
         """Generate interview questions from resume text, steered by job role."""
 
+        directive = DIFFICULTY_DIRECTIVES.get(
+            str(difficulty or "medium").lower(), DIFFICULTY_DIRECTIVES["medium"]
+        )
         prompt = _fill_prompt(
             QUESTION_GENERATION_PROMPT,
             resume_text=resume_text,
             job_role=job_role or "Software Engineer",
+            difficulty_directive=directive,
         )
 
         try:
@@ -112,24 +193,7 @@ class InterviewQuestionGenerator:
                 HumanMessage(content=prompt)
             ])
 
-            content = response.content.strip()
-
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else content
-
-            content = content.strip()
-
-            first_brace = content.find('{')
-            last_brace = content.rfind('}')
-
-            if first_brace == -1 or last_brace == -1 or first_brace >= last_brace:
-                raise ValueError("No valid JSON object found in response")
-
-            content = content[first_brace:last_brace + 1]
-            data = json.loads(content)
+            data = extract_json_object(response.content)
 
             category_map = {
                 "skills": "skill",
@@ -240,24 +304,7 @@ class InterviewQuestionGenerator:
                 HumanMessage(content=prompt)
             ])
 
-            content = response.content
-
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else content
-
-            content = content.strip()
-
-            first_brace = content.find('{')
-            last_brace = content.rfind('}')
-
-            if first_brace == -1 or last_brace == -1 or first_brace >= last_brace:
-                raise ValueError("No valid JSON object found in response")
-
-            content = content[first_brace:last_brace + 1]
-            data = json.loads(content)
+            data = extract_json_object(response.content)
 
             rating_raw = str(data.get("rating", "fair")).lower().strip()
             if rating_raw not in RATING_TO_SCORE_10:
@@ -286,8 +333,20 @@ class InterviewQuestionGenerator:
         except Exception as e:
             # `except (json.JSONDecodeError, Exception)` was redundant - the second
             # arm already caught everything, including the first.
-            # Default to "good" (not "fair") so parse failures do not over-probe.
-            logger.warning("evaluate_answer parse failed: %s", e)
+            #
+            # The rating still defaults to "good" (not "fair") because it feeds
+            # the follow-up decision, and "fair" would escalate an LLM hiccup
+            # into three more probes on a topic the system knows nothing about.
+            # `unscored=True` keeps that flow-control choice while excluding the
+            # placeholder 8.0 from the score, which used to silently inflate the
+            # final number and was indistinguishable from a real evaluation
+            # downstream.
+            EVALUATION_PARSE_FAILURES["count"] += 1
+            logger.warning(
+                "evaluate_answer parse failed (total=%d): %s",
+                EVALUATION_PARSE_FAILURES["count"],
+                e,
+            )
             return AnswerEvaluation(
                 rating=RatingEnum.GOOD,
                 score=RATING_TO_SCORE_10["good"],
@@ -295,6 +354,7 @@ class InterviewQuestionGenerator:
                 improvements=["Could not fully parse automated evaluation; review manually if needed"],
                 missing_concepts=[],
                 follow_up_direction="Ask for one concrete example or implementation detail",
+                unscored=True,
             )
 
 
@@ -320,17 +380,25 @@ class InterviewSessionManager:
         self,
         resume_text: str,
         job_role: str,
-        resume_name: str
+        resume_name: str,
+        difficulty: str = "medium",
     ) -> InterviewSession:
         """Create a new interview session"""
 
-        questions, profile = self.generator.generate_questions(resume_text, job_role=job_role)
+        difficulty = str(difficulty or "medium").lower()
+        if difficulty not in DIFFICULTY_DIRECTIVES:
+            difficulty = "medium"
+
+        questions, profile = self.generator.generate_questions(
+            resume_text, job_role=job_role, difficulty=difficulty
+        )
 
         session_id = str(uuid.uuid4())
         session = InterviewSession(
             session_id=session_id,
             resume_name=resume_name,
             job_role=job_role,
+            difficulty=difficulty,
             extracted_profile=profile,
             questions=questions,
             conversation_history="",
@@ -354,7 +422,7 @@ class InterviewSessionManager:
             return session.questions[session.current_question_index]
         return None
 
-    def submit_answer(self, session_id: str, answer: str) -> dict:
+    def submit_answer(self, session_id: str, answer: str, turn: Optional[int] = None) -> dict:
         """
         Submit answer to current question or follow-up.
 
@@ -365,12 +433,24 @@ class InterviewSessionManager:
             "follow_up_question": str (if action="follow_up", else null),
             "next_question": InterviewQuestion dict (if action="next_question", else null),
             "next_question_available": bool,
-            "followup_depth": int
+            "followup_depth": int,
+            "turn": int
         }
         """
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
+
+        # Idempotency, not locking. The whole session is a read-modify-write with
+        # no compare-and-set, so two concurrent submits (a double-Enter, an
+        # impatient double-click) both read the same state and the second SET
+        # wins, losing an answer and its evaluation. A lock would have to be held
+        # across two sequential LLM calls; rejecting a stale turn is a cheap 409
+        # *before* any LLM call and has no lifetime to get wrong.
+        if turn is not None and int(turn) != session.turn:
+            raise StaleTurnError(
+                f"Turn {turn} has already been submitted for this session"
+            )
 
         if not answer or not str(answer).strip():
             raise ValueError("Answer cannot be empty")
@@ -410,21 +490,40 @@ class InterviewSessionManager:
             candidate_answer=answer
         )
 
+        rating_key = _rating_value(evaluation.rating)
+        session.consecutive_poor = (
+            session.consecutive_poor + 1 if rating_key == "poor" else 0
+        )
+
+        # Depth at which this answer was given, before any increment below. The
+        # stored record must be tagged with the turn it belongs to, not the next.
+        answered_depth = session.current_followup_depth
+
         should_ask_followup = False
         action = "next_question"
 
         if not session.is_followup_mode:
+            # Unconditional on the first answer: a real interviewer never accepts
+            # an opening answer and moves on. The claim is made here; the
+            # follow-up is what tests whether it is real.
             should_ask_followup = True
             session.is_followup_mode = True
             session.current_followup_depth = 1
         else:
+            keeps_probing = evaluation.rating in [
+                RatingEnum.POOR,
+                RatingEnum.FAIR,
+                RatingEnum.GOOD,
+            ]
+            # Two consecutive "poor" ratings end the thread as well as
+            # "excellent". Previously only success or the depth cap could stop
+            # it, so a candidate who plainly did not know the topic got the
+            # longest possible interrogation on it.
+            struggling = session.consecutive_poor >= 2
             if (
                 session.current_followup_depth < session.max_followup_depth
-                and evaluation.rating in [
-                    RatingEnum.POOR,
-                    RatingEnum.FAIR,
-                    RatingEnum.GOOD,
-                ]
+                and keeps_probing
+                and not struggling
             ):
                 session.current_followup_depth += 1
                 should_ask_followup = True
@@ -442,45 +541,59 @@ class InterviewSessionManager:
                 if hasattr(current_question.difficulty_level, "value")
                 else str(current_question.difficulty_level)
             )
-            follow_up_q = self.generator.generate_followup(
-                primary_question=current_question.primary_question,
-                candidate_answer=answer,
-                difficulty_level=difficulty,
-                context=current_question.context,
-                conversation_history_text=session.conversation_history,
-                current_depth=session.current_followup_depth,
-                max_depth=session.max_followup_depth,
-                follow_up_direction=evaluation.follow_up_direction,
-                suggested_follow_up=suggested,
-            )
+            try:
+                follow_up_q = self.generator.generate_followup(
+                    primary_question=current_question.primary_question,
+                    candidate_answer=answer,
+                    difficulty_level=difficulty,
+                    context=current_question.context,
+                    conversation_history_text=session.conversation_history,
+                    current_depth=session.current_followup_depth,
+                    max_depth=session.max_followup_depth,
+                    follow_up_direction=evaluation.follow_up_direction,
+                    suggested_follow_up=suggested,
+                )
+            except Exception as exc:
+                # The evaluation call already succeeded. Unwinding the whole
+                # request here used to throw the answer away and make the
+                # candidate retype it. Fall back to the seed follow-up the
+                # generation prompt already produced for every question — it was
+                # sitting on the model unused — so the turn is never lost.
+                logger.warning(
+                    "Follow-up generation failed for %s, using seed question: %s",
+                    session_id,
+                    exc,
+                )
+                follow_up_q = (
+                    current_question.follow_up_question
+                    or evaluation.follow_up_direction
+                    or "Could you walk me through a concrete example of that?"
+                )
 
             follow_up_question = follow_up_q
             session.current_followup_question = follow_up_q
 
-            follow_up = FollowUpQuestion(
-                original_question_id=current_question.id,
-                depth=session.current_followup_depth,
-                question=follow_up_q,
-                candidate_answer=answer,
-                evaluation=evaluation
-            )
-            session.follow_ups.append(follow_up)
-        else:
+        # One record per submitted answer, in both branches, with `question`
+        # always meaning "the question this answer answers". The probing branch
+        # used to store the *next* question here, which mispaired every record
+        # except the last in each thread — data that is wrong at rest rather
+        # than merely duplicated.
+        session.follow_ups.append(FollowUpQuestion(
+            original_question_id=current_question.id,
+            depth=answered_depth,
+            question=question_asked,
+            candidate_answer=answer,
+            evaluation=evaluation,
+            next_question=follow_up_question or "",
+        ))
+
+        if not should_ask_followup:
             action = "next_question"
-
-            # Persist evaluation for the answer that closed this thread.
-            session.follow_ups.append(FollowUpQuestion(
-                original_question_id=current_question.id,
-                depth=session.current_followup_depth,
-                question=question_asked,
-                candidate_answer=answer,
-                evaluation=evaluation
-            ))
-
             session.is_followup_mode = False
             session.current_followup_depth = 0
             session.current_followup_question = ""
             session.conversation_history = ""
+            session.consecutive_poor = 0
 
         try:
             eval_dict = evaluation.model_dump(mode="json")
@@ -489,13 +602,16 @@ class InterviewSessionManager:
             if "rating" in eval_dict and hasattr(eval_dict["rating"], "value"):
                 eval_dict["rating"] = eval_dict["rating"].value
 
+        session.turn += 1
+
         result = {
             "action": action,
             "evaluation": eval_dict,
             "follow_up_question": follow_up_question,
             "followup_depth": session.current_followup_depth,
             "next_question": None,
-            "next_question_available": False
+            "next_question_available": False,
+            "turn": session.turn,
         }
 
         if action == "next_question":
@@ -520,6 +636,10 @@ class InterviewSessionManager:
                 }
             else:
                 session.status = "completed"
+
+        # Returned from the object already in hand. The route used to do a third
+        # Redis GET purely to re-read this flag.
+        result["interview_complete"] = session.status == "completed"
 
         self._save_session(session)
         return result
@@ -581,35 +701,47 @@ class InterviewSessionManager:
             "qa_pairs": []
         }
 
+        # Only primary answers open a qa_pair. Every answer in a thread —
+        # including follow-up answers — carries the primary question's id, so
+        # iterating all of them emitted the same question once per follow-up,
+        # each row repeating the identical follow-up list. `is_followup` was
+        # already being written correctly at submit time and simply never read.
         for answer in session.answers:
+            if answer.is_followup:
+                continue
+
             question = next(
                 (q for q in session.questions if q.id == answer.question_id),
                 None
             )
-            followups = [
+            if not question:
+                continue
+
+            # depth 0 is the primary turn itself; its evaluation belongs to the
+            # qa_pair, not to the nested follow-up thread.
+            thread = [
                 f for f in session.follow_ups
                 if f.original_question_id == answer.question_id
             ]
+            primary_eval = next((f for f in thread if f.depth == 0), None)
 
-            if question:
-                qa_pair = {
-                    "question": question.primary_question,
-                    "category": _category_label(question.category),
-                    "answer": answer.answer,
-                    "follow_ups": [
-                        {
-                            "question": f.question,
-                            "candidate_answer": f.candidate_answer,
-                            "evaluation": (
-                                f.evaluation.model_dump(mode="json")
-                                if hasattr(f.evaluation, "model_dump")
-                                else f.evaluation.dict()
-                            ),
-                        }
-                        for f in followups
-                    ]
-                }
-                report["qa_pairs"].append(qa_pair)
+            qa_pair = {
+                "question": question.primary_question,
+                "category": _category_label(question.category),
+                "answer": answer.answer,
+                "evaluation": _evaluation_dict(primary_eval.evaluation) if primary_eval else None,
+                "follow_ups": [
+                    {
+                        "depth": f.depth,
+                        "question": f.question,
+                        "candidate_answer": f.candidate_answer,
+                        "evaluation": _evaluation_dict(f.evaluation),
+                    }
+                    for f in thread
+                    if f.depth > 0
+                ],
+            }
+            report["qa_pairs"].append(qa_pair)
 
         return report
 
@@ -668,22 +800,7 @@ Return ONLY valid JSON with this shape:
                 HumanMessage(content=context)
             ])
 
-            content = response.content.strip()
-
-            if "```json" in content:
-                content = content.split("```json")[1].split("```")[0]
-            elif "```" in content:
-                parts = content.split("```")
-                content = parts[1] if len(parts) > 1 else content
-
-            content = content.strip()
-            first_brace = content.find('{')
-            last_brace = content.rfind('}')
-
-            if first_brace != -1 and last_brace != -1:
-                content = content[first_brace:last_brace + 1]
-
-            data = json.loads(content)
+            data = extract_json_object(response.content)
 
             return {
                 "strengths": data.get("strengths", []) or strengths[:3] or ["Participated in interview"],
@@ -702,19 +819,32 @@ Return ONLY valid JSON with this shape:
             }
 
     def calculate_interview_score(self, session_id: str) -> dict:
-        """Calculate comprehensive interview scores from recorded evaluations."""
+        """Calculate comprehensive interview scores from recorded evaluations.
+
+        This is the only score that is written to the database. The browser
+        renders it; it no longer computes its own and POSTs the result back.
+        """
         session = self.get_session(session_id)
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
         technical_scores = []
+        unscored_count = 0
         for follow_up in session.follow_ups:
-            rating_key = _rating_value(follow_up.evaluation.rating)
+            evaluation = follow_up.evaluation
+            # A parse-failure placeholder is not a judgement. Counting its 8.0
+            # as a real score inflated the average and was indistinguishable
+            # from a genuine evaluation downstream.
+            if getattr(evaluation, "unscored", False):
+                unscored_count += 1
+                continue
+
+            rating_key = _rating_value(evaluation.rating)
             # `is not None` rather than truthiness: a legitimate 0.0 score would
             # otherwise silently fall through to the rating-based default.
-            if getattr(follow_up.evaluation, "score", None) is not None:
+            if getattr(evaluation, "score", None) is not None:
                 # evaluation.score is 1–10; convert to 0–100 for report metrics.
-                technical_scores.append(float(follow_up.evaluation.score) * 10.0)
+                technical_scores.append(float(evaluation.score) * 10.0)
             else:
                 technical_scores.append(RATING_TO_SCORE.get(rating_key, 60.0))
 
@@ -724,28 +854,144 @@ Return ONLY valid JSON with this shape:
 
         avg_technical = sum(technical_scores) / len(technical_scores) if technical_scores else 0.0
 
-        # Derive soft metrics from answer substance when proctoring feeds are absent.
         answer_lengths = [len((a.answer or "").split()) for a in session.answers]
         avg_words = (sum(answer_lengths) / len(answer_lengths)) if answer_lengths else 0.0
         length_factor = min(1.0, avg_words / 80.0) if avg_words else 0.7
 
         communication = round(max(40.0, min(95.0, avg_technical * (0.85 + 0.15 * length_factor))), 1)
         confidence = round(max(40.0, min(95.0, avg_technical * (0.88 + 0.10 * length_factor))), 1)
-        # Eye contact remains a proxy until live proctoring metrics are persisted on the session.
-        eye_contact = round(max(40.0, min(95.0, avg_technical * 0.90)), 1)
         resume_alignment = round(max(40.0, min(95.0, avg_technical * 0.93)), 1)
         problem_solving = round(avg_technical * 0.9, 1)
-        overall = round(
-            (avg_technical + communication + confidence + eye_contact + resume_alignment) / 5,
-            1,
-        )
+
+        # Integrity comes only from what the server itself observed: YOLO's
+        # phone and extra-person verdicts on frames it decoded. Attention is
+        # browser-reported (see below) and deliberately does not grade anyone.
+        proctoring = self.session_store.get_proctoring(session_id)
+        frames = proctoring.get("frames_analysed", 0)
+        integrity_penalty = self._integrity_penalty(proctoring)
+
+        # Attention is feedback, not a component of the score. It used to be
+        # `eye_contact_score`, computed server-side from a nose-in-bounding-box
+        # approximation on one frame every three seconds, and weighted at 0.15
+        # of the result. The browser measures the same thing far better — iris
+        # position between the eye corners, every frame — and it already tracks
+        # duration, which frame counts cannot. Since nothing here acts on the
+        # number adversarially, the better measurement is worth more than the
+        # weaker attestation; the price is that it can no longer grade.
+        attention = self._attention_summary(proctoring)
+
+        component_scores = {
+            "technical_score": avg_technical,
+            "communication_score": communication,
+            "confidence_score": confidence,
+            "resume_alignment_score": resume_alignment,
+        }
+        earned, applied_weights = self._overall_percentage(component_scores)
+        overall = round(max(0.0, min(100.0, earned - integrity_penalty)), 1)
 
         return {
             "technical_score": round(avg_technical, 1),
             "communication_score": communication,
             "confidence_score": confidence,
-            "eye_contact_score": eye_contact,
             "resume_alignment_score": resume_alignment,
             "problem_solving_score": problem_solving,
             "overall_score": overall,
+            "integrity_penalty": integrity_penalty,
+            "unscored_evaluations": unscored_count,
+            "proctoring": {
+                "frames_analysed": frames,
+                "phone_frames": proctoring.get("phone_frames", 0),
+                "multiple_person_frames": proctoring.get("multiple_person_frames", 0),
+            },
+            # Browser-measured, shown as feedback, excluded from the score.
+            "attention": attention,
+            # What the percentage was actually taken over, so the number can be
+            # explained rather than just displayed.
+            "score_basis": {
+                "components": sorted(applied_weights),
+                "weights": {k: round(v, 4) for k, v in sorted(applied_weights.items())},
+            },
         }
+
+    @staticmethod
+    def _overall_percentage(component_scores: dict) -> Tuple[float, dict]:
+        """Weighted percentage over the components that were measured.
+
+        The overall used to be a plain mean of whatever components happened to
+        exist. That is not comparable across candidates: a session with no
+        camera averaged four numbers and a session with a camera averaged five,
+        so the two results sat on subtly different scales and nothing said so.
+
+        This computes an explicit percentage instead. Each component carries a
+        fixed weight; when one could not be measured, its weight is
+        redistributed across the rest **in proportion**, so the weights always
+        sum to 1.0 and the result is always "percentage of the criteria that
+        could actually be assessed". Two candidates are then comparable by
+        construction — the basis is reported alongside the number so a missing
+        component is visible rather than silently absorbed.
+        """
+        available = {
+            name: float(score)
+            for name, score in component_scores.items()
+            if score is not None and name in SCORE_WEIGHTS
+        }
+        if not available:
+            return 0.0, {}
+
+        total_weight = sum(SCORE_WEIGHTS[name] for name in available)
+        if total_weight <= 0:
+            return 0.0, {}
+
+        applied = {name: SCORE_WEIGHTS[name] / total_weight for name in available}
+        earned = sum(available[name] * applied[name] for name in available)
+        return earned, applied
+
+    @staticmethod
+    def _attention_summary(proctoring: dict) -> dict:
+        """Browser-reported attention, presented as feedback.
+
+        Returns None values when the browser never reported — no camera, or an
+        older client — rather than a plausible-looking default. Nothing here
+        feeds the score; it sits alongside filler words and speaking rate, which
+        are also browser-measured and which nobody expects to be attested.
+        """
+        samples = proctoring.get("attention_samples", 0)
+        if samples <= 0:
+            return {
+                "reported": False,
+                "on_screen_percentage": None,
+                "look_away_events": 0,
+                "look_away_seconds": 0,
+                "no_face_events": 0,
+            }
+
+        attentive = min(proctoring.get("attentive_samples", 0), samples)
+        return {
+            "reported": True,
+            "on_screen_percentage": round((attentive / samples) * 100.0, 1),
+            "look_away_events": proctoring.get("look_away_events", 0),
+            "look_away_seconds": proctoring.get("look_away_seconds", 0),
+            "no_face_events": proctoring.get("no_face_events", 0),
+        }
+
+    @staticmethod
+    def _integrity_penalty(proctoring: dict) -> float:
+        """Penalty in points, computed from server-observed frames only.
+
+        The client used to compute this from browser-tracked counters and POST
+        the finished number, which made the scoring policy editable in devtools.
+        """
+        frames = proctoring.get("frames_analysed", 0)
+        if frames <= 0:
+            return 0.0
+
+        # Only YOLO's verdicts. The look-away term that used to live here was
+        # sourced from the server's own coarse gaze estimate; attention is now
+        # browser-reported and does not penalise, so it is gone rather than
+        # silently reading a field the client supplies.
+        penalty = 0.0
+        if proctoring.get("phone_frames", 0) > 0:
+            penalty += 15.0
+        if proctoring.get("multiple_person_frames", 0) > 0:
+            penalty += 10.0
+        return round(min(30.0, penalty), 1)

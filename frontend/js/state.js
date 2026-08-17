@@ -71,7 +71,26 @@ const state = {
     resumeRawText: '',
     tempExtracted: null,
     reportData: null,
-    sessionEnded: false
+    sessionEnded: false,
+
+    // Server-issued turn counter, echoed back on every answer submission so a
+    // duplicate is rejected with a 409 instead of silently overwriting the
+    // previous answer's evaluation.
+    turn: 0,
+    // Guards against a double-Enter / double-click firing two submissions.
+    submitInFlight: false,
+
+    // Browser-measured attention, reported to the server as feedback. The
+    // server used to compute a coarser version of this itself; the browser's
+    // iris-based estimate runs at camera rate and tracks duration, which frame
+    // counts cannot.
+    attention: {
+        samples: 0,
+        attentiveSamples: 0,
+        lookAwayEvents: 0,
+        lookAwaySeconds: 0,
+        noFaceEvents: 0
+    }
 };
 
 
@@ -132,6 +151,12 @@ function resetState() {
     // Left true after the first interview, this silently suppressed the
     // end-session call (and therefore the saved score) on every later run.
     state.sessionEnded = false;
+    state.turn = 0;
+    state.submitInFlight = false;
+    state.attention = {
+        samples: 0, attentiveSamples: 0, lookAwayEvents: 0,
+        lookAwaySeconds: 0, noFaceEvents: 0
+    };
 }
 
 
