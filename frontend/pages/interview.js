@@ -7,9 +7,18 @@ let cvAnimationId = null;
 let cheatCheckInterval = null;
 let tokenRefreshInterval = null;
 let attentionInterval = null;
-// True only when browser MediaPipe is genuinely running. startCvCanvas() is a
-// simulator, not a detector, and must never be mistaken for one.
-let faceTrackingLive = false;
+// Timestamp of the last FaceMesh result. `faceTrackingLive` is derived from it
+// rather than from whether the camera started: cameraInstance.start() resolving
+// only proves the webcam opened, and MediaPipe can accept frames while its WASM
+// never produces a result. Treating that as "tracking works" made the page
+// ignore the server's face verdict while detecting nothing itself — the exact
+// state where no warning appears no matter what the candidate does.
+let lastFaceMeshResultAt = 0;
+function isFaceTrackingLive() {
+    // One result within the last 4 seconds. MediaPipe fires at camera rate, so
+    // a live tracker is never this quiet; the window only tolerates a hiccup.
+    return lastFaceMeshResultAt > 0 && (Date.now() - lastFaceMeshResultAt) < 4000;
+}
 let emptyFrameStreak = 0;
 let lookAwaySeconds = 0;
 let silenceSeconds = 0;
@@ -88,6 +97,8 @@ function initMediaPipe() {
 
         faceMesh.onResults((results) => {
             if (!state.interviewActive) return;
+            // Proof of life: this is what isFaceTrackingLive() reads.
+            lastFaceMeshResultAt = Date.now();
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const w = canvas.width;
@@ -276,15 +287,18 @@ function initMediaPipe() {
         });
 
         cameraInstance.start().then(() => {
-            faceTrackingLive = true;
-            console.info('[proctoring] browser MediaPipe active — face tracking is live');
+            // The camera opened. Whether MediaPipe actually produces results is
+            // a separate question, answered by the heartbeat below.
+            setTimeout(() => {
+                console.info(isFaceTrackingLive()
+                    ? '[proctoring] browser MediaPipe active — face tracking is live'
+                    : '[proctoring] camera open but MediaPipe produced no results; relying on server detection');
+            }, 3000);
         }).catch(err => {
-            faceTrackingLive = false;
             console.warn("[proctoring] camera capture failed; face tracking is NOT running", err);
             startCvCanvas();
         });
     } catch(err) {
-        faceTrackingLive = false;
         console.error("[proctoring] MediaPipe failed to initialise; face tracking is NOT running", err);
         startCvCanvas();
     }
@@ -560,7 +574,7 @@ function startCvCanvas() {
         // never flag an absent face, which is indistinguishable from working
         // proctoring. Say what is actually true instead; the server's
         // person-count verdict (below) is what still detects an empty frame.
-        if (!faceTrackingLive) {
+        if (!isFaceTrackingLive()) {
             ctx.fillStyle = 'rgba(10, 10, 10, 0.55)';
             ctx.fillRect(0, 0, w, h);
             ctx.fillStyle = '#eab308';
@@ -785,7 +799,7 @@ function startFrameAnalysis() {
                     // for, since the browser loads its WASM from a CDN and can
                     // fail silently into a fallback that detects nothing.
                     const faceAnalysis = result.face_analysis;
-                    if (faceAnalysis && !faceTrackingLive) {
+                    if (faceAnalysis && !isFaceTrackingLive()) {
                         if (faceAnalysis.status === 'no_face') {
                             if (!state.simulations.noFace) {
                                 state.simulations.noFace = true;
@@ -838,7 +852,7 @@ function startFrameAnalysis() {
                             }
                         } else {
                             emptyFrameStreak = 0;
-                            if (!faceTrackingLive && state.simulations.noFace) {
+                            if (!isFaceTrackingLive() && state.simulations.noFace) {
                                 state.simulations.noFace = false;
                                 state.warnings = state.warnings.filter(w => !w.includes('No one visible'));
                                 updateWarningsList();
