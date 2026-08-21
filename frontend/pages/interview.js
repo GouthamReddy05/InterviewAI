@@ -497,7 +497,7 @@ function renderActiveInterview() {
                     ${_questionInfo(question)}
                     ${_simulationPanel()}
                     ${_liveMetrics()}
-                    ${_ragEvaluatorPanel()}
+                    ${_evaluationPanel()}
                     ${_warningsPanel()}
                     ${_agentStatusPanel()}
                 </div>
@@ -1106,13 +1106,13 @@ async function processAnswer(userAnswer) {
             candidateAnswer: userAnswer,
             score: numericScore,
             feedback: evaluation.feedback || feedbackParts.join(' | ') || 'Response recorded.',
-            idealAnswer: evaluation.follow_up_direction
-                ? `Next probe: ${evaluation.follow_up_direction}`
-                : (currentQ.ideal || 'Focus on concrete implementation, tradeoffs, and production impact.'),
-            correctness: numericScore,
-            depth: Math.max(1, Math.min(10, numericScore - (missingConcepts.length > 0 ? 0.5 : 0))),
-            completeness: Math.max(1, Math.min(10, numericScore - (improvements.length > 2 ? 1 : 0))),
-            conceptsMentioned: strengths.slice(0, 4),
+            // The model returns ONE score. `correctness`, `depth` and
+            // `completeness` used to be shown as three separate rubric
+            // dimensions, all three derived from that single number with
+            // cosmetic fudges (-0.5 for any missing concept, -1 for >2
+            // improvements). Three tiles, one measurement, invented precision.
+            nextProbe: evaluation.follow_up_direction || '',
+            strengths: strengths.slice(0, 4),
             missingConcepts: missingConcepts.slice(0, 4),
             rating: evaluation.rating || null,
         };
@@ -1290,7 +1290,7 @@ function _chatPanel(question) {
                 <span class="w-2 h-2 bg-success-500 rounded-full"></span>
                 <span class="text-white text-xs font-semibold uppercase tracking-wider">AI Dialogue Interface</span>
             </div>
-            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Llama 3 (Groq)</span>
+            <span class="text-surface-500 text-[10px] font-mono">NLP Engine: Groq</span>
         </div>
 
         <div id="chatContainer" class="p-5 space-y-4 max-h-[300px] overflow-y-auto" style="min-height:260px">
@@ -1379,7 +1379,7 @@ function _liveMetrics() {
     </div>`;
 }
 
-function _ragEvaluatorPanel() {
+function _evaluationPanel() {
     const evalObj = state.lastEvaluation;
 
     let contentHtml = '';
@@ -1392,37 +1392,29 @@ function _ragEvaluatorPanel() {
     } else {
         contentHtml = `
             <div class="space-y-4 mt-2">
-                <div>
-                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-1.5">Reference Ideal Answer</div>
-                    <div class="text-slate-700 bg-slate-50 border border-slate-200 p-3 rounded-lg leading-relaxed text-[11px] max-h-24 overflow-y-auto">
-                        ${escapeHtml(evalObj.idealAnswer || 'No reference answer available for this turn.')}
-                    </div>
-                </div>
-                <div class="grid grid-cols-3 gap-3 text-center">
-                    <div class="bg-blue-50 p-2.5 rounded-lg border border-blue-100">
-                        <div class="text-blue-700 text-[8px] font-mono uppercase tracking-widest">Correctness</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.correctness != null ? evalObj.correctness : evalObj.score}/10</div>
-                    </div>
-                    <div class="bg-emerald-50 p-2.5 rounded-lg border border-emerald-100">
-                        <div class="text-emerald-700 text-[8px] font-mono uppercase tracking-widest">Depth</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.depth != null ? evalObj.depth : evalObj.score}/10</div>
-                    </div>
-                    <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-100">
-                        <div class="text-amber-700 text-[8px] font-mono uppercase tracking-widest">Completeness</div>
-                        <div class="text-slate-950 font-bold font-mono text-sm mt-1">${evalObj.completeness != null ? evalObj.completeness : evalObj.score}/10</div>
-                    </div>
+                <div class="flex items-center justify-between bg-slate-50 border border-slate-200 p-3 rounded-lg">
+                    <span class="text-slate-500 text-[9px] uppercase tracking-widest font-mono">Score</span>
+                    <span class="text-slate-950 font-bold font-mono text-base">${evalObj.score}/10${evalObj.rating ? ` <span class="text-slate-500 text-[10px] font-normal uppercase">${escapeHtml(String(evalObj.rating))}</span>` : ''}</span>
                 </div>
 
+                ${evalObj.nextProbe ? `
                 <div>
-                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Concept Alignment</div>
+                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-1.5">Suggested Next Probe</div>
+                    <div class="text-slate-700 bg-slate-50 border border-slate-200 p-3 rounded-lg leading-relaxed text-[11px] max-h-24 overflow-y-auto">
+                        ${escapeHtml(evalObj.nextProbe)}
+                    </div>
+                </div>` : ''}
+
+                <div>
+                    <div class="text-slate-500 text-[9px] uppercase tracking-widest font-mono mb-2">Strengths &amp; Gaps</div>
                     <div class="flex flex-wrap gap-2">
-                        ${(evalObj.conceptsMentioned || []).map(c => `
+                        ${(evalObj.strengths || []).map(c => `
                             <span class="bg-emerald-600 text-white text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">✓ ${escapeHtml(c)}</span>
                         `).join('')}
                         ${(evalObj.missingConcepts || []).map(c => `
                             <span class="bg-slate-100 text-slate-600 border border-slate-200 text-[9px] px-2 py-1 rounded-md font-medium tracking-wide">Missing: ${escapeHtml(c)}</span>
                         `).join('')}
-                        ${(!(evalObj.conceptsMentioned || []).length && !(evalObj.missingConcepts || []).length)
+                        ${(!(evalObj.strengths || []).length && !(evalObj.missingConcepts || []).length)
                             ? `<span class="text-slate-500 text-[10px]">${escapeHtml(evalObj.feedback || 'Evaluation recorded.')}</span>`
                             : ''}
                     </div>
@@ -1434,8 +1426,8 @@ function _ragEvaluatorPanel() {
     return `
     <div class="glass rounded-xl p-4 border border-surface-800 bg-surface-900/10">
         <div class="text-white text-xs font-semibold mb-2 uppercase tracking-wider font-mono flex items-center justify-between">
-            <span>RAG Evaluator Agent Logs</span>
-            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono animate-pulse">Llama 3 (Groq)</span>
+            <span>Answer Evaluation</span>
+            <span class="text-[9px] bg-accent-600/10 text-accent-400 px-2 py-0.5 rounded font-normal border border-accent-500/10 font-mono">Groq</span>
         </div>
         ${contentHtml}
     </div>`;

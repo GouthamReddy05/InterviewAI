@@ -34,7 +34,7 @@ Three stores, each with one job:
 | Layer | Choice | Why |
 |---|---|---|
 | API | FastAPI + Uvicorn | Async routing, Pydantic validation, `run_in_threadpool` for blocking ML calls |
-| LLM | Groq · `llama-3.3-70b-versatile` | Latency. Every turn is two sequential LLM calls, so per-token speed decides how the conversation *feels* |
+| LLM | Groq · `openai/gpt-oss-120b` (override with `GROQ_MODEL`) | Model id is configurable, not hardcoded: the previous `llama-3.3-70b-versatile` was decommissioned by Groq and surfaced only as a 502 with `model_not_found` buried in the log |
 | Live state | Redis | Every answer rewrites the whole session blob 30–40 times a session — a `SET` that expires itself, not a large row update |
 | Records | Postgres + SQLAlchemy 2.x | Ownership and finished reports |
 | Auth | JWT (HS256) + bcrypt | Per-request DB lookup so `is_admin` is never trusted from the token |
@@ -59,7 +59,7 @@ python3 -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env              # then fill in GROQ_API_KEY and DATABASE_URL
+# create .env with DATABASE_URL and GROQ_API_KEY (see Configuration below)
 uvicorn app:app --reload --port 8000
 ```
 
@@ -83,11 +83,30 @@ python -m pytest        # 45 tests, no network, no models loaded
 
 ## Configuration
 
-See `.env.example` (development) and `.env.production.example` (deployment).
-Required: `DATABASE_URL`, `GROQ_API_KEY`. Optional: `ELEVENLABS_API_KEY`
-(TTS is disabled without it), `REDIS_URL`.
+Everything is read from `.env` in the repo root. There is no template file —
+this is the list.
 
-Configuration is validated at import, and a misconfigured production deploy
+| Variable | | |
+|---|---|---|
+| `DATABASE_URL` | **required** | SQLAlchemy URL, e.g. `postgresql+psycopg2://user:pass@localhost:5432/interviewai` |
+| `GROQ_API_KEY` | **required** | Question generation and answer evaluation |
+| `GROQ_MODEL` | optional | Defaults to `openai/gpt-oss-120b` |
+| `JWT_SECRET_KEY` | required in production | 32+ chars. Unset in dev = a random per-process value, so tokens die on restart |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | optional | Defaults to 480. Do not lower to 60 — that is inside the length of a real interview, and expiry mid-session logs the candidate out and strands the Redis session |
+| `ELEVENLABS_API_KEY` | optional | TTS. Unset ⇒ `/api/generate-speech` returns 503 |
+| `REDIS_URL` | optional in dev | Without it, an in-process dict; single worker only |
+| `SESSION_TTL_SECONDS` | optional | Defaults to 21600 (6 h) |
+| `ENVIRONMENT` | optional | `development` (default) or `production` |
+| `DEBUG`, `LOG_LEVEL` | optional | `false`, `INFO` |
+| `CORS_ALLOW_ORIGINS` | optional | Comma-separated. `*` is rejected in production |
+| `MAX_UPLOAD_SIZE_MB` | optional | Defaults to 10 |
+
+Note the exact spelling `ELEVENLABS_API_KEY` — no underscore after `ELEVEN`.
+A misspelt key is not an error: `get_elevenlabs_client()` returns `None`,
+`/api/generate-speech` returns 503, and the frontend quietly falls back to the
+browser's built-in `speechSynthesis` voice.
+
+Configuration is validated at import, and a misconfigured production run
 **refuses to start** rather than running quietly insecure. With
 `ENVIRONMENT=production`, the app will not boot if:
 
@@ -149,6 +168,14 @@ JSON that cannot be parsed, the evaluation is tagged `unscored` — the fallback
 rating still drives interview flow, but the placeholder value never inflates the
 final number.
 
+**A turn is dominated by the LLM, not by anything local.** Measured medians on an
+M2 CPU: evaluation 7.7 s, follow-up generation 10.1 s, TTS 1.3 s, transcription
+0 s (browser). Those two LLM calls run *sequentially* inside one
+`run_in_threadpool`, so a follow-up turn is ~19 s and an advance turn ~8.9 s.
+The follow-up call only needs the evaluation's `follow_up_direction`, not its
+full body, so running the two concurrently is the obvious next win — it is not
+done yet.
+
 **Transcription is browser-only, on purpose.** A server-side faster-whisper
 pass used to re-transcribe the recorded clip and overwrite the live text. It was
 supposed to be gated on quality, but the gate read `info.language_probability` —
@@ -163,23 +190,18 @@ discarded.
 
 ---
 
-## Deployment
+## Running it
 
-```bash
-cp .env.production.example .env.production   # then fill it in
-docker compose up --build
-```
+There is no Docker setup in the repo — it was removed deliberately; this is run
+locally, from the Quick start above. Two constraints are worth knowing before
+that changes:
 
-Brings up the app with Postgres and Redis. Notes baked into the image:
-
-- **CPU-only torch.** PyPI's default Linux wheel depends on ~2 GB of NVIDIA CUDA
-  packages that nothing here uses.
-- **`opencv-python-headless`.** The API calls only `imdecode`, `flip` and
-  `IMREAD_COLOR`; the regular wheel drags in X11 libraries and is the usual
-  cause of `ImportError: libGL.so.1` in a container.
-- **Single worker.** Sessions and rate limits live in Redis so more workers would
-  be correct, but each loads its own copy of torch and YOLO. Scale with more
-  containers, not more workers.
+- **CPU-only torch.** PyPI's default Linux wheel pulls ~2 GB of NVIDIA CUDA
+  packages that nothing here uses. `requirements.txt` already points torch at
+  PyTorch's CPU index for this reason.
+- **Single process.** Sessions and rate limits live in Redis, so multiple
+  workers would be *correct*, but each one loads its own copy of torch and YOLO.
+  That is a memory ceiling, not a correctness one.
 
 Needs ~2 GB RAM, nearly all of it torch and YOLO.
 
@@ -206,9 +228,6 @@ Stated plainly rather than discovered later.
    were chosen, not derived from outcome data — and since communication,
    confidence and résumé alignment are all derived from the technical score, the
    effective weight on technical performance is far higher than its nominal 0.35.
-
-`FIXES_REPORT.md` documents the 26 defects found in a self-audit of this
-codebase and how each was fixed.
 
 ---
 

@@ -65,7 +65,7 @@ function renderInterviewSetup() {
                         <p class="text-surface-400 text-xs mt-1">${escapeHtml(state.jobRole)}</p>
                     </div>
                     <div class="space-y-4 text-xs">
-                        <div class="flex items-center justify-between"><span class="text-surface-500">Questions</span><span class="text-white font-mono">${state.questions.length}</span></div>
+                        <div class="flex items-center justify-between"><span class="text-surface-500">Questions</span><span class="text-white font-mono">${state.questions.length || '8–10'}</span></div>
                         <div class="flex items-center justify-between"><span class="text-surface-500">Difficulty</span><span class="text-indigo-300 font-semibold capitalize">${escapeHtml(state.difficulty)}</span></div>
                         <div class="flex items-center justify-between"><span class="text-surface-500">Focus checks</span><span class="text-emerald-300">Ready</span></div>
                     </div>
@@ -84,6 +84,17 @@ function renderInterviewSetup() {
     if (window.lucide) setTimeout(() => lucide.createIcons(), 10);
 }
 
+/**
+ * Questions do not exist yet on this screen.
+ *
+ * They used to be generated before setup, so `state.questions.length` was a
+ * real number here. Generation moved into the analysis step (see beginSession
+ * below) so that the chosen difficulty is sent *with* the resume — which means
+ * the array is empty at this point and the summary showed a hard "0" for every
+ * difficulty. The prompt asks for 8-10 questions and caps at 12
+ * (MAX_PRIMARY_QUESTIONS), and difficulty changes question complexity, not
+ * count, so the range is the same for easy/medium/hard.
+ */
 function selectDifficulty(diff) {
     state.difficulty = diff;
     renderInterviewSetup();

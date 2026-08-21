@@ -248,12 +248,15 @@ lsof -i :8000
 4. Use wired connection if possible
 5. Disable screen recording if interviewing
 
-### For Production
-1. Use GPU for faster inference: `device="cuda"`
-2. Enable model caching
-3. Use CDN for static assets
-4. Implement database connection pooling
-5. Add rate limiting
+### If this ever needs to scale
+Already done: model caching (`@lru_cache` singletons in `app.py`) and rate
+limiting (`core/rate_limit.py`, six limiters). Still open:
+
+1. Run the two per-turn LLM calls concurrently — they are sequential today and
+   are ~90% of a turn's latency
+2. GPU for YOLO inference (`ultralytics` picks the device automatically)
+3. Database connection pooling
+4. CDN for static assets
 
 ## Next Steps
 
