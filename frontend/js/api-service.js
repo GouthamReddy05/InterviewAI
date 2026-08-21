@@ -307,27 +307,6 @@ const API = {
 
 
 
-    async transcribeAudio(audioBlob) {
-        const formData = new FormData();
-        formData.append('audio', audioBlob, 'audio.wav');
-
-        try {
-            const response = await fetch(`${this.BASE_URL}/transcribe-audio`, {
-                method: 'POST',
-                headers: this.getHeaders(),
-                body: formData
-            });
-            return await response.json();
-        } catch (error) {
-            console.error('Transcription error:', error);
-            return {
-                status: 'error',
-                transcription: { text: '', confidence: 0 }
-            };
-        }
-    },
-
-
     async generateSpeech(text, voiceId = 'JBFqnCBsd6RMkjVDRZzb') {
         const formData = new FormData();
         formData.append('text', text);

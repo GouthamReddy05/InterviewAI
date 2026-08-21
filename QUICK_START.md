@@ -38,7 +38,6 @@ LOG_LEVEL=INFO
 # Download YOLOv8 model
 python3 -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
 
-# Whisper will auto-download on first use
 ```
 
 ## Running the Application
@@ -138,9 +137,9 @@ The application comes with 3 pre-configured profiles:
 - Integration with YOLOv8
 
 ✅ **Audio Transcription**
-- Real-time speech-to-text
-- Whisper model integration
-- Confidence scoring
+- Real-time speech-to-text via the browser's Web Speech API
+- Streams into the answer box as the candidate talks
+- Chrome/Edge only; other browsers fall back to typing
 
 ✅ **Text-to-Speech**
 - Question reading with AI voice
@@ -176,7 +175,6 @@ GET    /api/session/{id}/comprehensive-report  # Final report
 POST   /api/analyze-frame                      # Full analysis
 POST   /api/detect-face                        # Face detection
 POST   /api/detect-objects                     # Object detection
-POST   /api/transcribe-audio                   # Audio to text
 POST   /api/generate-speech                    # Text to speech
 GET    /api/tts-voices                         # Available voices
 ```

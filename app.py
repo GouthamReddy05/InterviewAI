@@ -118,13 +118,6 @@ def get_yolo_model():
 
 
 @lru_cache(maxsize=1)
-def get_whisper_model():
-    from faster_whisper import WhisperModel
-
-    return WhisperModel("small", device="cpu", compute_type="int8")
-
-
-@lru_cache(maxsize=1)
 def get_elevenlabs_client():
     """Return a configured ElevenLabs client, or None when no key is set.
 
@@ -192,11 +185,9 @@ async def _warm_models() -> None:
     frontend's 3-second timer kept firing. The hook is what is eager here, not
     the functions.
 
-    Only YOLO is warmed. Whisper is not: it is first hit when a candidate stops
-    speaking, tens of seconds into the interview, by which point a lazy load has
-    had ample opportunity — and loading it eagerly would cost memory in every
-    worker for a model a text-only candidate never touches. The ElevenLabs
-    client is an HTTP client, not a model.
+    Only the CV models are warmed. The ElevenLabs client is an HTTP client, not
+    a model, and there is nothing else left to load: transcription is done by
+    the browser's Web Speech API, so no speech model is resident server-side.
     """
     if os.getenv("SKIP_MODEL_WARMUP", "").lower() in {"1", "true", "yes"}:
         return
@@ -811,7 +802,6 @@ _EMPTY_FRAME_RESPONSE = {
 }
 
 _MAX_FRAME_BYTES = 8 * 1024 * 1024
-_MAX_AUDIO_BYTES = 25 * 1024 * 1024
 
 
 async def _read_bounded(upload: UploadFile, limit: int, label: str) -> bytes:
@@ -1093,36 +1083,6 @@ async def detect_objects(
         return JSONResponse({"status": "error", "message": "Invalid frame"}, status_code=400)
 
     return JSONResponse({"status": "success", "object_detection": result})
-
-
-@app.post("/api/transcribe-audio")
-async def transcribe_audio(
-    audio: UploadFile = File(...),
-    current_user: db_models.User = Depends(rate_limit.audio_rate_limit),
-):
-    """Transcribe audio to text using Whisper."""
-    audio_bytes = await _read_bounded(audio, _MAX_AUDIO_BYTES, "Audio")
-    if not audio_bytes:
-        raise HTTPException(status_code=400, detail="Empty audio upload")
-
-    def _run():
-        segments, info = get_whisper_model().transcribe(
-            io.BytesIO(audio_bytes), language="en", beam_size=5
-        )
-        text = " ".join(segment.text for segment in segments).strip()
-        return {
-            "text": text,
-            "confidence": getattr(info, "language_probability", 0.9),
-            "language": getattr(info, "language", "en"),
-            "status": "success",
-        }
-
-    try:
-        result = await run_in_threadpool(_run)
-    except Exception as exc:
-        raise _fail(500, "Transcription failed", exc, "Transcription")
-
-    return JSONResponse({"status": "success", "transcription": result})
 
 
 _VOICES = [

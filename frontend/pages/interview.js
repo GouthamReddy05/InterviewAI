@@ -306,8 +306,6 @@ function initMediaPipe() {
 
 
 
-let mediaRecorder = null;
-let audioChunks = [];
 
 function initSpeechRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -386,7 +384,7 @@ function initSpeechRecognition() {
 
 async function startRecording() {
     if (state.isRecording) {
-        await stopRecording();
+        stopRecording();
         return;
     }
 
@@ -399,74 +397,51 @@ async function startRecording() {
         try { recognition.start(); } catch(e) { console.error('Failed to start recognition', e); }
     }
 
-    if (state.stream) {
-        audioChunks = [];
-        mediaRecorder = new MediaRecorder(state.stream);
-        mediaRecorder.ondataavailable = e => {
-            if (e.data.size > 0) audioChunks.push(e.data);
-        };
-        mediaRecorder.start();
-        state.isRecording = true;
-        recordingStartTime = Date.now();
-        render();
-    }
+    // No MediaRecorder any more: the recorded clip existed only to be posted to
+    // the server for a second transcription pass, and that pass is gone.
+    //
+    // This also no longer hangs off `state.stream`. recognition.start() above
+    // never did, so gating the flag on the camera stream meant a candidate
+    // without a camera had recognition running while `isRecording` stayed
+    // false — and stopRecording() then returned early without ever stopping it.
+    state.isRecording = true;
+    recordingStartTime = Date.now();
+    render();
 }
 
+/**
+ * End the answer and settle the transcript.
+ *
+ * Web Speech has been writing the running transcript straight into the input
+ * box on every `onresult`, so by the time recognition stops the text is already
+ * on screen and there is nothing left to wait for. This used to await a
+ * `/api/transcribe-audio` round-trip — faster-whisper `small` on CPU, ~6.7 s on
+ * a 35 s answer — whose result then overwrote the box. That pass is removed: it
+ * was gated on `info.language_probability`, which is the model's confidence
+ * that the audio is *English*, not that the transcription is good. It reads
+ * 1.000 on ordinary speech, so the gate never rejected anything and the server
+ * pass replaced the live text unconditionally — six seconds on the critical
+ * path to overwrite text that was already correct.
+ *
+ * The cost is browsers with no Web Speech API — Safari and Firefox, where
+ * `initSpeechRecognition` bails at the feature check. Those candidates type
+ * their answers; there is no server-side fallback for them any more.
+ */
 function stopRecording() {
-    return new Promise((resolve) => {
-        if (!state.isRecording) {
-            resolve();
-            return;
-        }
+    if (!state.isRecording) return;
 
-        state.isRecording = false;
+    state.isRecording = false;
 
-        if (recognition) {
-            try { recognition.stop(); } catch(e) {}
-        }
+    if (recognition) {
+        try { recognition.stop(); } catch(e) {}
+    }
 
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-            mediaRecorder.onstop = async () => {
-                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                const input = document.getElementById('textInput');
-                if (input) input.placeholder = "Transcribing with Whisper...";
-                render();
+    const input = document.getElementById('textInput');
+    if (input && input.value.trim()) {
+        state.transcript = input.value.trim();
+    }
 
-                try {
-                    const response = await API.transcribeAudio(audioBlob);
-                    const t = response && response.transcription;
-                    // The overwrite used to be unconditional, so a worse Whisper
-                    // pass silently destroyed what Web Speech had already
-                    // produced and the candidate had to retype. The confidence
-                    // value was in the response and ignored; it is now the gate.
-                    const confidence = t && typeof t.confidence === 'number' ? t.confidence : 1;
-                    const whisperText = t && typeof t.text === 'string' ? t.text.trim() : '';
-                    const liveText = (input && input.value.trim()) || state.transcript || '';
-
-                    if (whisperText && (confidence >= 0.6 || !liveText)) {
-                        state.transcript = whisperText;
-                        if (input) input.value = whisperText;
-                    } else if (whisperText && liveText) {
-                        console.info('Keeping live transcript; Whisper confidence', confidence);
-                    }
-                } catch (err) {
-                    console.error("Backend transcription failed", err);
-                }
-
-                if (input) input.placeholder = "Type your answer or use microphone...";
-                render();
-                resolve();
-            };
-            mediaRecorder.stop();
-        } else {
-            const input = document.getElementById('textInput');
-            if (input && input.value.trim()) {
-                state.transcript = input.value.trim();
-            }
-            render();
-            resolve();
-        }
-    });
+    render();
 }
 
 
@@ -1038,7 +1013,7 @@ async function submitAnswer() {
     if (state.submitInFlight) return;
 
     if (state.isRecording) {
-        await stopRecording();
+        stopRecording();
     }
 
     const input = document.getElementById('textInput');

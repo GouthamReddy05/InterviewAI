@@ -1,7 +1,7 @@
 """Fixed-window rate limiting for the endpoints that cost money or CPU.
 
 There was previously nothing in this codebase between a caller and unlimited
-login attempts, Whisper inference, YOLO inference or ElevenLabs billing. Every
+login attempts, YOLO inference or ElevenLabs billing. Every
 ML endpoint required a valid token but had no session binding and no ceiling, so
 one authenticated account could saturate the box for free.
 
@@ -141,8 +141,6 @@ def anonymous_limiter(name: str, limit: int, window_seconds: int):
 # One frame every 3s per candidate is 20/min; 40/min leaves headroom for a
 # retry storm without allowing a scripted flood.
 frame_rate_limit = authenticated_limiter("frame", limit=40, window_seconds=60)
-# Whisper on a 'small' int8 CPU model is seconds of compute per clip.
-audio_rate_limit = authenticated_limiter("audio", limit=12, window_seconds=60)
 # ElevenLabs is billed per character.
 tts_rate_limit = authenticated_limiter("tts", limit=20, window_seconds=60)
 # Each upload is a multi-second LLM generation call.

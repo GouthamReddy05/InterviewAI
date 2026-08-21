@@ -40,7 +40,7 @@ Three stores, each with one job:
 | Auth | JWT (HS256) + bcrypt | Per-request DB lookup so `is_admin` is never trusted from the token |
 | Vision | YOLOv8n | Phone and extra-person detection — the only server-verified integrity signals |
 | Attention | Browser MediaPipe FaceMesh | Iris-based gaze at camera rate. Reported as feedback, never scored |
-| Speech in | Web Speech API + faster-whisper | Live interim transcript in-browser; the recorded clip re-transcribed server-side |
+| Speech in | Web Speech API | In-browser streaming recognition, written live into the answer box. Chrome/Edge only — other browsers type |
 | Speech out | ElevenLabs | Returns 503 when no key is set — no fallback key |
 | Frontend | Vanilla JS | One `state` object, a `switch` router over `state.step`, `innerHTML` rendering with explicit escaping |
 
@@ -65,8 +65,8 @@ uvicorn app:app --reload --port 8000
 
 Open <http://localhost:8000>.
 
-YOLO weights ship in the repo at `ml/yolov8n.pt` — no download step. The
-faster-whisper model (~460 MB) is fetched on the first transcription.
+YOLO weights ship in the repo at `ml/yolov8n.pt` — no download step. No
+speech model is downloaded: transcription happens in the browser.
 
 Redis is optional in development: without it the app falls back to a
 process-local dict and logs a warning. In production an unreachable Redis
@@ -111,7 +111,7 @@ signing key impossible to ship by accident.
 `POST /api/session/{id}/answer` · `GET /api/session/{id}/comprehensive-report` ·
 `POST /api/session/{id}/end` · `POST /api/session/{id}/attention`
 
-**Media** — `POST /api/analyze-frame` · `POST /api/transcribe-audio` ·
+**Media** — `POST /api/analyze-frame` ·
 `POST /api/generate-speech`
 
 **Ops** — `GET /api/health` (also reports the session-store mode and the
@@ -122,7 +122,7 @@ returns **404 rather than 403** when the caller does not own the session — 403
 would confirm the ID exists and turn the endpoint into an enumeration oracle.
 
 All endpoints that cost money or CPU are rate-limited: login, signup, upload,
-answer, frame analysis, transcription and TTS.
+answer, frame analysis and TTS.
 
 ---
 
@@ -149,6 +149,15 @@ JSON that cannot be parsed, the evaluation is tagged `unscored` — the fallback
 rating still drives interview flow, but the placeholder value never inflates the
 final number.
 
+**Transcription is browser-only, on purpose.** A server-side faster-whisper
+pass used to re-transcribe the recorded clip and overwrite the live text. It was
+supposed to be gated on quality, but the gate read `info.language_probability` —
+the model's confidence that the audio is *English*, which sits at 1.000 on
+ordinary speech — so it never rejected anything. The result was ~6.7 s of blocking
+CPU per answer (measured, `small`/int8, 35 s clip, RTF 0.19) to replace text that
+was already correct. Removed. The cost is that Safari and Firefox have no voice
+input and candidates there type.
+
 **Résumé files are never written to disk.** They are parsed in memory and
 discarded.
 
@@ -168,13 +177,11 @@ Brings up the app with Postgres and Redis. Notes baked into the image:
 - **`opencv-python-headless`.** The API calls only `imdecode`, `flip` and
   `IMREAD_COLOR`; the regular wheel drags in X11 libraries and is the usual
   cause of `ImportError: libGL.so.1` in a container.
-- **Whisper pre-baked** (`--build-arg BAKE_WHISPER=0` to skip), so a candidate's
-  first spoken answer does not stall on a model download.
 - **Single worker.** Sessions and rate limits live in Redis so more workers would
   be correct, but each loads its own copy of torch and YOLO. Scale with more
   containers, not more workers.
 
-Needs ~2 GB RAM. Free tiers generally will not fit torch plus Whisper.
+Needs ~2 GB RAM, nearly all of it torch and YOLO.
 
 ---
 
@@ -208,7 +215,7 @@ codebase and how each was fixed.
 ## Repository layout
 
 ```
-app.py                    FastAPI app, routes, YOLO/Whisper/TTS handlers
+app.py                    FastAPI app, routes, YOLO/TTS handlers
 api/                      auth and admin routers
 core/                     settings, auth, database, Redis store, rate limiting
 models/                   SQLAlchemy tables and Pydantic schemas

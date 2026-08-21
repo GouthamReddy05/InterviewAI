@@ -36,16 +36,7 @@ numpy>=1.26.0,<3.0
 
 opencv-python-headless>=4.9.0,<5.0
 
-# Server-side face and gaze detection. Kept alongside the browser's own
-# MediaPipe deliberately: the browser loads its WASM from a CDN and can fail to
-# initialise, falling back to an overlay that cannot detect anything. A single
-# detector that can silently stop is not proctoring — the two fail for
-# different reasons, which is the whole value of running both.
-#
-# Capped below 1.0: MediaPipe 1.x removes the legacy `mp.solutions` API this
-# code uses (FaceMesh lives under Tasks there instead), so an unbounded range
-# installs a version where `mp.solutions.face_mesh` does not exist and face
-# detection silently degrades to a warm-up warning. Same trap as OpenCV 5.
+
 mediapipe>=0.10.14,<1.0
 
 ultralytics>=8.2.0
@@ -53,6 +44,5 @@ ultralytics>=8.2.0
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.2.0
 
-faster-whisper>=1.0.0
 elevenlabs>=1.0.0
 
