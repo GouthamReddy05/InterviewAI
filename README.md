@@ -39,7 +39,7 @@ Three stores, each with one job:
 | Records | Postgres + SQLAlchemy 2.x | Ownership and finished reports |
 | Auth | JWT (HS256) + bcrypt | Per-request DB lookup so `is_admin` is never trusted from the token |
 | Vision | YOLOv8n | Phone and extra-person detection — the only server-verified integrity signals |
-| Attention | Browser MediaPipe FaceMesh | Iris-based gaze at camera rate. Reported as feedback, never scored |
+| Attention | Browser MediaPipe FaceMesh | Iris-based gaze at ~12 fps, in the tab. The only face detector in the system. Reported as feedback, never scored |
 | Speech in | Web Speech API | In-browser streaming recognition, written live into the answer box. Chrome/Edge only — other browsers type |
 | Speech out | ElevenLabs | Returns 503 when no key is set — no fallback key |
 | Frontend | Vanilla JS | One `state` object, a `switch` router over `state.step`, `innerHTML` rendering with explicit escaping |
@@ -152,12 +152,15 @@ answer, frame analysis and TTS.
 the real per-answer evaluations plus YOLO's own frame verdicts, as a weighted
 percentage over the components that could actually be measured.
 
-**Attention is measured in the browser and never scored.** The browser runs
-MediaPipe FaceMesh at camera rate with an iris-based gaze estimate — a better
+**Face tracking runs only in the browser.** MediaPipe FaceMesh, throttled to
+~12 fps, estimates gaze from iris position between the eye corners — a better
 measurement than anything recoverable from one 320×240 JPEG every three seconds,
-and it tracks duration, which frame counts cannot. Because it is client-sourced
-it is presented as feedback and does not grade anyone. The integrity penalty is
-sourced only from YOLO.
+and it tracks duration, which frame counts cannot. There is no server-side
+FaceMesh: it duplicated this measurement more coarsely, its verdicts were
+recorded and read by nothing, and YOLO's person count already covers the case it
+existed for — the browser's CDN-loaded WASM failing to initialise. Because
+attention is client-sourced it is presented as feedback and does not grade
+anyone. The integrity penalty is sourced only from YOLO.
 
 **Answer submissions are idempotent.** Each carries a turn token; a replayed or
 duplicated submission is rejected with a 409 *before* either LLM call, rather

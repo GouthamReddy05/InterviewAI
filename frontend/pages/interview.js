@@ -14,6 +14,12 @@ let attentionInterval = null;
 // ignore the server's face verdict while detecting nothing itself — the exact
 // state where no warning appears no matter what the candidate does.
 let lastFaceMeshResultAt = 0;
+
+// Browser FaceMesh is now the only face detector in the system; the server-side
+// copy is gone. It does not need to run at camera rate to do that job.
+const FACE_MESH_TARGET_FPS = 12;
+const FACE_MESH_MIN_INTERVAL_MS = 1000 / FACE_MESH_TARGET_FPS;
+let lastFaceMeshSentAt = 0;
 function isFaceTrackingLive() {
     // One result within the last 4 seconds. MediaPipe fires at camera rate, so
     // a live tracker is never this quiet; the window only tolerates a hiccup.
@@ -277,6 +283,16 @@ function initMediaPipe() {
             onFrame: async () => {
                 if (!state.interviewActive) return;
 
+                // Throttled to FACE_MESH_TARGET_FPS. Camera's requestAnimationFrame
+                // loop awaits this callback, so an unthrottled send ran inference on
+                // every frame the machine could manage — 25-30 fps of WASM on the
+                // same thread that renders the interview UI. Gaze does not change
+                // meaningfully between 33 ms and 83 ms, and the counters this feeds
+                // are ratios, so a lower sample rate costs precision nobody reads
+                // while giving the page back most of a core.
+                const now = performance.now();
+                if (now - lastFaceMeshSentAt < FACE_MESH_MIN_INTERVAL_MS) return;
+                lastFaceMeshSentAt = now;
 
                 if (faceMesh) {
                     await faceMesh.send({ image: video });
@@ -768,42 +784,9 @@ function startFrameAnalysis() {
                 const result = await API.analyzeFrame(frameBlob, state.sessionId);
 
                     const objectAnalysis = result.object_analysis;
-                    // The server runs its own FaceMesh again. Its verdict is
-                    // authoritative for face presence when the browser's copy
-                    // is not running — which is exactly the case this exists
-                    // for, since the browser loads its WASM from a CDN and can
-                    // fail silently into a fallback that detects nothing.
-                    const faceAnalysis = result.face_analysis;
-                    if (faceAnalysis && !isFaceTrackingLive()) {
-                        if (faceAnalysis.status === 'no_face') {
-                            if (!state.simulations.noFace) {
-                                state.simulations.noFace = true;
-                                const msg = 'Face missing. Return to the camera viewport.';
-                                if (!state.warnings.includes(msg)) {
-                                    state.warnings.unshift(msg);
-                                    showTopBanner('FACE NOT DETECTED');
-                                    updateWarningsList();
-                                }
-                            }
-                        } else if (faceAnalysis.status === 'multiple_faces') {
-                            if (!state.simulations.multipleFaces) {
-                                state.simulations.multipleFaces = true;
-                                const msg = 'Multiple people detected in frame!';
-                                if (!state.warnings.includes(msg)) {
-                                    state.warnings.unshift(msg);
-                                    showTopBanner('MULTIPLE PEOPLE DETECTED');
-                                    updateWarningsList();
-                                }
-                            }
-                        } else if (faceAnalysis.status === 'face_detected') {
-                            state.simulations.noFace = false;
-                            state.simulations.multipleFaces = false;
-                            state.simulations.lookAway = !!faceAnalysis.looking_away;
-                            state.warnings = state.warnings.filter(
-                                w => !w.includes('Face missing') && !w.includes('Multiple people'));
-                            updateWarningsList();
-                        }
-                    }
+                    // No server face verdict to reconcile any more: face
+                    // presence is the browser's FaceMesh, corroborated by
+                    // YOLO's person count below.
 
                     if (objectAnalysis) {
                         state.simulations.phoneUsage = objectAnalysis.phone_detected || false;
