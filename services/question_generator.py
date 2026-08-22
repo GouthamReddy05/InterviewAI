@@ -129,6 +129,28 @@ def _fill_prompt(template: str, **kwargs) -> str:
     return out
 
 
+# Asked only when the follow-up model call fails. Deliberately generic: it is
+# always grammatical and always answerable, which a salvaged fragment of
+# interviewer-facing prose is not.
+_GENERIC_FOLLOW_UP = "Could you walk me through a concrete example of that?"
+
+
+def _fallback_follow_up(direction: str) -> str:
+    """Turn an evaluation's follow-up direction into something askable.
+
+    ``follow_up_direction`` is written for the interviewer — "probe how they
+    chose the index" — so asking it verbatim reads as a stage instruction, not
+    a question. It is used only when the model already phrased it as a question
+    to the candidate; otherwise the generic prompt is asked instead. This path
+    used to reach for the seed follow-up written at generation time, which no
+    longer exists.
+    """
+    text = (direction or "").strip()
+    if text.endswith("?"):
+        return text
+    return _GENERIC_FOLLOW_UP
+
+
 def _rating_value(rating) -> str:
     if hasattr(rating, "value"):
         return str(rating.value).lower()
@@ -176,7 +198,7 @@ class InterviewQuestionGenerator:
         resume_text: str,
         job_role: str = "Software Engineer",
         difficulty: str = "medium",
-    ) -> Tuple[List[InterviewQuestion], dict]:
+    ) -> List[InterviewQuestion]:
         """Generate interview questions from resume text, steered by job role."""
 
         directive = DIFFICULTY_DIRECTIVES.get(
@@ -233,15 +255,21 @@ class InterviewQuestionGenerator:
                     primary_question=q.get("primary_question", ""),
                     context=q.get("context", ""),
                     difficulty_level=diff,
-                    follow_up_question=q.get("follow_up_question", "") or "",
                 )
                 questions.append(question)
 
             # Hard cap so live interviews stay practical even if the model over-generates.
             questions = questions[:MAX_PRIMARY_QUESTIONS]
 
-            profile = data.get("extracted_profile", {})
-            return questions, profile
+            # `extracted_profile` and `candidate_level` are in the response
+            # schema but deliberately not parsed. They exist to make the model
+            # commit to a band and enumerate the resume's skills and projects
+            # *before* it writes the questions — tokens are emitted in order, so
+            # the questions are generated after that read rather than instead of
+            # it. Nothing downstream consumed the profile: it was stored, shipped
+            # to the browser and assigned to three variables no render function
+            # ever read.
+            return questions
 
         except Exception as e:
             logger.exception("Question generation failed: %s: %s", type(e).__name__, e)
@@ -257,9 +285,15 @@ class InterviewQuestionGenerator:
         current_depth: int = 1,
         max_depth: int = 3,
         follow_up_direction: str = "",
-        suggested_follow_up: str = "",
     ) -> str:
-        """Generate follow-up question based on candidate answer and conversation history"""
+        """Generate a follow-up from the answer that was just given.
+
+        There is no seed question to fall back on by design: the generation
+        prompt no longer writes one. A follow-up guessed before the answer
+        exists cannot respond to what was actually said, so the only inputs
+        here are the primary question, the answer, the thread so far, and the
+        direction the evaluation asked for.
+        """
 
         history_text = conversation_history_text if conversation_history_text else "[No prior follow-ups yet]"
 
@@ -273,7 +307,6 @@ class InterviewQuestionGenerator:
             current_depth=current_depth,
             max_depth=max_depth,
             follow_up_direction=follow_up_direction or "Ask for a concrete example, at a depth appropriate to the candidate's level.",
-            suggested_follow_up=suggested_follow_up or "[None provided]",
         )
 
         try:
@@ -384,6 +417,7 @@ class InterviewSessionManager:
         job_role: str,
         resume_name: str,
         difficulty: str = "medium",
+        user_id: Optional[int] = None,
     ) -> InterviewSession:
         """Create a new interview session"""
 
@@ -391,17 +425,17 @@ class InterviewSessionManager:
         if difficulty not in DIFFICULTY_DIRECTIVES:
             difficulty = "medium"
 
-        questions, profile = self.generator.generate_questions(
+        questions = self.generator.generate_questions(
             resume_text, job_role=job_role, difficulty=difficulty
         )
 
         session_id = str(uuid.uuid4())
         session = InterviewSession(
             session_id=session_id,
+            user_id=user_id,
             resume_name=resume_name,
             job_role=job_role,
             difficulty=difficulty,
-            extracted_profile=profile,
             questions=questions,
             conversation_history="",
             memory=None,
@@ -535,9 +569,6 @@ class InterviewSessionManager:
         follow_up_question = None
         if should_ask_followup:
             action = "follow_up"
-            # Prefer bank follow-up as a seed on first depth; always adapt via LLM.
-            suggested = current_question.follow_up_question if session.current_followup_depth == 1 else ""
-
             difficulty = (
                 current_question.difficulty_level.value
                 if hasattr(current_question.difficulty_level, "value")
@@ -553,24 +584,25 @@ class InterviewSessionManager:
                     current_depth=session.current_followup_depth,
                     max_depth=session.max_followup_depth,
                     follow_up_direction=evaluation.follow_up_direction,
-                    suggested_follow_up=suggested,
                 )
             except Exception as exc:
                 # The evaluation call already succeeded. Unwinding the whole
-                # request here used to throw the answer away and make the
-                # candidate retype it. Fall back to the seed follow-up the
-                # generation prompt already produced for every question — it was
-                # sitting on the model unused — so the turn is never lost.
+                # request here would throw the answer away and make the
+                # candidate retype it, so the turn is completed with the best
+                # question available without a second model call.
+                #
+                # There is no pre-generated seed to fall back on any more. The
+                # evaluation's follow_up_direction is written for an interviewer
+                # ("probe how they chose the index"), not addressed to the
+                # candidate, so it is phrased into a question rather than asked
+                # verbatim.
                 logger.warning(
-                    "Follow-up generation failed for %s, using seed question: %s",
+                    "Follow-up generation failed for %s, falling back to the "
+                    "evaluation's direction: %s",
                     session_id,
                     exc,
                 )
-                follow_up_q = (
-                    current_question.follow_up_question
-                    or evaluation.follow_up_direction
-                    or "Could you walk me through a concrete example of that?"
-                )
+                follow_up_q = _fallback_follow_up(evaluation.follow_up_direction)
 
             follow_up_question = follow_up_q
             session.current_followup_question = follow_up_q

@@ -82,7 +82,7 @@ def signup(
         raise HTTPException(status_code=400, detail="Username or email already registered")
     db.refresh(new_user)
 
-    access_token = auth.create_access_token(data={"sub": new_user.username})
+    access_token = auth.create_access_token(data={"sub": new_user.username, "uid": new_user.id})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -105,7 +105,7 @@ def login(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token = auth.create_access_token(data={"sub": user.username})
+    access_token = auth.create_access_token(data={"sub": user.username, "uid": user.id})
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -121,7 +121,7 @@ def refresh(current_user: db_models.User = Depends(auth.get_current_user)):
     each can plausibly outlast a fixed expiry, so the frontend now renews
     proactively while the candidate is still authenticated.
     """
-    access_token = auth.create_access_token(data={"sub": current_user.username})
+    access_token = auth.create_access_token(data={"sub": current_user.username, "uid": current_user.id})
     return {"access_token": access_token, "token_type": "bearer"}
 
 

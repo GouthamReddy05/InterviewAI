@@ -14,13 +14,12 @@ lost data, so it does not need to fail the boot.
 import logging
 import threading
 import time
-from typing import Dict, Optional, Tuple
+from typing import Dict, Tuple
 
 from fastapi import Depends, HTTPException, Request
 
 from core import auth
 from core.settings import settings
-from models import db_models
 
 logger = logging.getLogger(__name__)
 
@@ -98,13 +97,13 @@ class RateLimiter:
         self.window_seconds = window_seconds
         self.per_user = per_user
 
-    def _identity(self, request: Request, user: Optional[db_models.User]) -> str:
+    def _identity(self, request: Request, user) -> str:
         if self.per_user and user is not None:
             return f"user:{user.id}"
         client = request.client
         return f"ip:{client.host if client else 'unknown'}"
 
-    def __call__(self, request: Request, user: Optional[db_models.User] = None):
+    def __call__(self, request: Request, user=None):
         key = f"{self.name}:{self._identity(request, user)}"
         if _hit(key, self.limit, self.window_seconds):
             raise HTTPException(
@@ -115,15 +114,22 @@ class RateLimiter:
 
 
 def authenticated_limiter(name: str, limit: int, window_seconds: int):
-    """Build a dependency that rate-limits an authenticated endpoint by user id."""
+    """Build a dependency that rate-limits an authenticated endpoint by user id.
+
+    Identity comes from the token rather than a ``users`` row: the limiter needs
+    the id and nothing else, and this dependency sits in front of the webcam
+    frame endpoint, which fires every three seconds for the length of an
+    interview. Reading a row to learn an id the token already carries was the
+    largest single source of database traffic in the app.
+    """
     limiter = RateLimiter(name, limit, window_seconds, per_user=True)
 
     def dependency(
         request: Request,
-        current_user: db_models.User = Depends(auth.get_current_user),
-    ) -> db_models.User:
-        limiter(request, current_user)
-        return current_user
+        identity: auth.TokenIdentity = Depends(auth.get_token_identity),
+    ) -> auth.TokenIdentity:
+        limiter(request, identity)
+        return identity
 
     return dependency
 

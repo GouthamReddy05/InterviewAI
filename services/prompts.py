@@ -204,30 +204,12 @@ that assume professional experience the resume does not show.
 
 --------------------------------------------------
 
-FOLLOW-UP QUESTIONS
+DO NOT WRITE FOLLOW-UPS
 
-For EVERY primary question generate EXACTLY ONE contextual follow-up.
-
-The follow-up should extend the discussion by one natural step — the kind of thing
-a curious interviewer asks next. It must stay in the same difficulty band as the
-primary question. A follow-up is NOT an opportunity to jump to expert level.
-
-For FRESHER / JUNIOR, good follow-ups:
-
-- asking for a concrete example
-- asking "why did you choose that approach?"
-- asking how they'd handle a simple edge case
-- asking what they found hardest about it
-- asking how they knew it worked
-
-For MID / SENIOR, additionally:
-
-- introducing a new constraint
-- discussing alternatives and tradeoffs
-- asking about scale, testing, or monitoring
-
-The follow-up must directly relate to the primary question and sound like a real
-person asking, not an exam paper.
+Generate primary questions only. Follow-ups are written later, mid-interview, by a
+separate call that has read the candidate's actual answer — a follow-up guessed
+before the answer exists cannot respond to what was said, and is exactly the kind
+of scripted second question a real interviewer never asks.
 
 --------------------------------------------------
 
@@ -261,7 +243,6 @@ behavioral, achievement.
       "category": "generic_skill | project | experience | scenario | behavioral | achievement",
       "name": "Technology / Project / Experience",
       "primary_question": "...",
-      "follow_up_question": "...",
       "context": "Why this question matters",
       "difficulty_level": "easy | intermediate | advanced | expert"
     }
@@ -286,9 +267,6 @@ Difficulty:
 
 Question Context:
 {context}
-
-Suggested Follow-up (optional seed — adapt or replace based on the answer):
-{suggested_follow_up}
 
 Follow-up Direction From Evaluation:
 {follow_up_direction}

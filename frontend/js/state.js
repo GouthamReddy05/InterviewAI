@@ -8,9 +8,6 @@ const state = {
     jobRole: '',
     candidateName: '',
     difficulty: 'medium',
-    skills: [],
-    projects: [],
-    experience: '',
     currentQuestion: 0,
     questions: [],
     totalQuestions: 0,
@@ -102,9 +99,6 @@ function resetState() {
     state.jobRole = '';
     state.candidateName = '';
     state.difficulty = 'medium';
-    state.skills = [];
-    state.projects = [];
-    state.experience = '';
     state.currentQuestion = 0;
     state.questions = [];
     state.totalQuestions = 0;

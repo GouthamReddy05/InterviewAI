@@ -250,6 +250,51 @@ def get_owned_interview(
     return interview
 
 
+def get_live_session(
+    session_id: str,
+    identity: auth.TokenIdentity = Depends(auth.get_token_identity),
+    db: Session = Depends(database.get_db),
+):
+    """Authorise a live-session request and return the session, from Redis.
+
+    Replaces ``get_owned_interview`` + ``_load_live_session`` on every route
+    that was going to read the session anyway. Those two together cost a
+    ``users`` row, an ``interviews`` row and a Redis GET per request; at one
+    webcam frame every three seconds that was ~800 queries an interview to
+    re-answer a question the session blob can answer itself.
+
+    Sessions written before ``user_id`` existed have none, so those fall back to
+    the database check rather than being refused. Both paths return 404 for an
+    interview that is not the caller's, so the endpoint never confirms that an
+    unknown-to-this-user session id exists.
+
+    Note the admin bypass is not carried over. Admin tooling reads finished
+    interviews through /api/admin/*, which does read privilege from the
+    database; nothing needs an admin to reach into a live session mid-answer.
+    """
+    session = session_manager.get_session(session_id)
+    if session is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Interview session has expired or is no longer available",
+        )
+
+    owner_id = getattr(session, "user_id", None)
+    if owner_id is None:
+        # Legacy session blob: fall back to the interviews row.
+        row = (
+            db.query(db_models.InterviewSessionModel)
+            .filter(db_models.InterviewSessionModel.session_id == session_id)
+            .first()
+        )
+        owner_id = row.user_id if row else None
+
+    if owner_id != identity.id:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return session
+
+
 def _load_live_session(session_id: str):
     session = session_manager.get_session(session_id)
     if not session:
@@ -393,6 +438,7 @@ async def upload_resume(
             job_role=job_role,
             resume_name=resume.filename,
             difficulty=difficulty,
+            user_id=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -414,8 +460,8 @@ async def upload_resume(
     db_interview = db_models.InterviewSessionModel(
         session_id=session.session_id,
         user_id=current_user.id,
-        resume_name=resume.filename,
         job_role=job_role,
+        difficulty=difficulty,
         status="in_progress",
     )
     db.add(db_interview)
@@ -439,7 +485,6 @@ async def upload_resume(
             "total_questions": total,
             "job_role": job_role,
             "difficulty": difficulty,
-            "extracted_profile": session.extracted_profile,
             "questions": questions,
             "turn": session.turn,
             "first_question": _question_payload(first_question, 1, total)
@@ -453,10 +498,9 @@ async def upload_resume(
 @app.get("/api/session/{session_id}/question")
 async def get_current_question(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Get the current question for a session."""
-    session = _load_live_session(session_id)
     current_question = session_manager.get_current_question(session_id)
     if not current_question:
         raise HTTPException(status_code=400, detail="Interview already completed")
@@ -477,11 +521,10 @@ async def get_current_question(
 async def submit_answer(
     session_id: str,
     request: AnswerSubmissionRequest,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
-    current_user: db_models.User = Depends(rate_limit.answer_rate_limit),
+    session=Depends(get_live_session),
+    identity: auth.TokenIdentity = Depends(rate_limit.answer_rate_limit),
 ):
     """Submit an answer to the current question or follow-up."""
-    _load_live_session(session_id)
 
     try:
         result = await run_in_threadpool(
@@ -520,10 +563,9 @@ async def submit_answer(
 @app.post("/api/session/{session_id}/next-question")
 async def next_question(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Skip remaining follow-ups and move to the next primary question."""
-    session = _load_live_session(session_id)
 
     try:
         has_next = await run_in_threadpool(
@@ -560,10 +602,9 @@ async def next_question(
 @app.get("/api/session/{session_id}/progress")
 async def get_progress(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Get interview progress."""
-    _load_live_session(session_id)
     try:
         progress = session_manager.get_interview_progress(session_id)
     except ValueError:
@@ -577,10 +618,9 @@ async def get_progress(
 @app.get("/api/session/{session_id}/report")
 async def get_report(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Get the complete interview report."""
-    _load_live_session(session_id)
     try:
         report = session_manager.get_interview_report(session_id)
     except ValueError:
@@ -613,10 +653,9 @@ async def health_check():
 @app.get("/api/session/{session_id}/scores")
 async def get_interview_scores(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Get interview scores and metrics."""
-    _load_live_session(session_id)
     try:
         scores = session_manager.calculate_interview_score(session_id)
     except ValueError:
@@ -630,10 +669,9 @@ async def get_interview_scores(
 @app.get("/api/session/{session_id}/improvement-plan")
 async def get_improvement_plan(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    session=Depends(get_live_session),
 ):
     """Get a personalised improvement plan based on interview performance."""
-    _load_live_session(session_id)
     try:
         plan = await run_in_threadpool(
             session_manager.generate_improvement_plan, session_id
@@ -654,21 +692,15 @@ async def get_comprehensive_report(
 ):
     """Get the full interview report with scores, analysis and improvements.
 
-    Served from the persisted ``report_data`` whenever one exists. That column
-    was written here and read by nothing, so a candidate who came back after the
-    6-hour Redis TTL got a 404 for a report that was sitting durably in
-    Postgres — and every refresh inside the TTL paid for a fresh improvement-plan
-    LLM call. Reading it back fixes both.
-    """
-    if interview.report_data:
-        return JSONResponse(
-            {
-                "status": "success",
-                "comprehensive_report": interview.report_data,
-                "source": "stored",
-            }
-        )
+    Built from the live Redis session every time. The report is not persisted:
+    an interview always finishes inside the session's 6-hour TTL, so the window
+    in which a candidate reads their report is the same window in which the
+    session is still alive. After the TTL this returns 404 and the durable
+    record is the score and status on the interview row.
 
+    The cost of not caching it is one improvement-plan LLM call per view, and a
+    plan that is re-written (and so worded differently) on every refresh.
+    """
     session = _load_live_session(session_id)
 
     try:
@@ -698,12 +730,11 @@ async def get_comprehensive_report(
     try:
         interview.status = "completed"
         interview.score = scores.get("overall_score", 0.0)
-        interview.report_data = comprehensive_report
         db.commit()
     except SQLAlchemyError as exc:
-        # Report generation succeeded; persisting it is best-effort.
+        # Report generation succeeded; persisting the score is best-effort.
         db.rollback()
-        logger.warning("Could not persist report for %s: %s", session_id, exc)
+        logger.warning("Could not persist score for %s: %s", session_id, exc)
 
     return JSONResponse({"status": "success", "comprehensive_report": comprehensive_report})
 
@@ -712,8 +743,8 @@ async def get_comprehensive_report(
 async def report_attention(
     session_id: str,
     report: AttentionReport,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
-    current_user: db_models.User = Depends(rate_limit.answer_rate_limit),
+    session=Depends(get_live_session),
+    identity: auth.TokenIdentity = Depends(rate_limit.answer_rate_limit),
 ):
     """Record the browser's attention measurements for this interview.
 
@@ -753,7 +784,7 @@ async def report_attention(
 @app.post("/api/session/{session_id}/end")
 async def end_session(
     session_id: str,
-    interview: db_models.InterviewSessionModel = Depends(get_owned_interview),
+    identity: auth.TokenIdentity = Depends(auth.get_token_identity),
     db: Session = Depends(database.get_db),
 ):
     """Mark an interview completed and store the server's own final score.
@@ -764,23 +795,49 @@ async def end_session(
     range check (ge=0, le=100) validated the shape of a value that should never
     have crossed the trust boundary at all — anyone could POST a 100. The score
     is now computed here, from evaluations and server-observed proctoring only.
+
+    It reads no rows. Ownership used to cost a ``users`` lookup and an
+    ``interviews`` lookup before a write that changed, in the normal flow,
+    nothing at all — the report endpoint runs first and has already stored the
+    identical status and score, so SQLAlchemy emitted no UPDATE. Scoping the
+    UPDATE to ``user_id`` makes the write its own authorisation check: a row
+    that is not the caller's is not matched, and a zero row count is the 404.
+
+    Consequence: an admin can no longer end another user's interview. Nothing
+    does that — admin tooling reads finished interviews through /api/admin/*.
     """
     session = session_manager.get_session(session_id)
 
-    final_score = interview.score
+    final_score = None
     if session:
         session.status = "completed"
         session_manager.session_store.set(session_id, session)
         try:
             scores = session_manager.calculate_interview_score(session_id)
-            final_score = scores.get("overall_score", final_score)
+            final_score = scores.get("overall_score")
         except Exception as exc:
             logger.warning("Could not compute final score for %s: %s", session_id, exc)
 
+    # Leave `score` alone when there is no live session to compute one from,
+    # rather than overwriting a stored number with a guess.
+    values = {"status": "completed"}
+    if final_score is not None:
+        values["score"] = final_score
+
     try:
-        interview.status = "completed"
-        if final_score is not None:
-            interview.score = final_score
+        updated = (
+            db.query(db_models.InterviewSessionModel)
+            .filter(
+                db_models.InterviewSessionModel.session_id == session_id,
+                db_models.InterviewSessionModel.user_id == identity.id,
+            )
+            .update(values, synchronize_session=False)
+        )
+        if not updated:
+            db.rollback()
+            # 404 rather than 403, matching every other session route: the
+            # endpoint does not confirm that an unknown-to-this-user id exists.
+            raise HTTPException(status_code=404, detail="Session not found")
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
@@ -1040,9 +1097,11 @@ async def analyze_frame(
         return JSONResponse(dict(_EMPTY_FRAME_RESPONSE))
 
     if session_id:
-        # Reuse the same ownership rule as every other session route, including
-        # its 404-not-403 behaviour.
-        get_owned_interview(session_id=session_id, current_user=current_user, db=db)
+        # Same ownership rule as every other live-session route, read from the
+        # session blob rather than the interviews row: this fires every three
+        # seconds per candidate and was the app's largest source of database
+        # traffic.
+        get_live_session(session_id=session_id, identity=current_user, db=db)
 
     try:
         # CPU-bound inference must not run on the event loop; doing so blocked

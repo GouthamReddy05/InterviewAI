@@ -207,14 +207,6 @@ async function uploadResumeToBackend() {
                     ideal: `Context: ${q.context}`,
                     concepts: []
                 }));
-
-
-                const profile = response.extracted_profile || {};
-                state.skills = profile.skills || [];
-                state.projects = profile.projects || [];
-
-                const exp = profile.experience || [];
-                state.experience = exp.length > 0 ? exp.join(', ') : 'Professional Experience';
             }
 
             console.log('Resume uploaded successfully, session created:', state.sessionId);

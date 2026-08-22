@@ -44,7 +44,11 @@ class InterviewQuestion(BaseModel):
     primary_question: str
     context: str
     difficulty_level: DifficultyLevel
-    follow_up_question: str = ""
+    # No follow-up field: follow-ups are written mid-interview by
+    # generate_followup(), after the candidate's answer has been read. A
+    # question generated before the answer exists cannot respond to it.
+    # Sessions serialized before this change still load — pydantic ignores the
+    # extra key.
 
     class Config:
         json_schema_extra = {
@@ -55,7 +59,6 @@ class InterviewQuestion(BaseModel):
                 "primary_question": "Describe a production issue you solved using Python.",
                 "context": "Understanding real-world debugging and optimization",
                 "difficulty_level": "advanced",
-                "follow_up_question": "How did you verify the fix in production?"
             }
         }
 
@@ -136,12 +139,17 @@ class AttentionReport(BaseModel):
 
 class InterviewSession(BaseModel):
     session_id: str
+    # Who owns this interview. Present so a live-session request can be
+    # authorised from the blob it was about to read anyway, instead of a
+    # separate `interviews` row lookup on every webcam frame. Optional so
+    # sessions written before this field existed still load; those fall back to
+    # the database check.
+    user_id: Optional[int] = None
     resume_name: str
     job_role: str
     # Candidate-chosen difficulty band, applied as a ceiling override in the
     # generation prompt. Was previously a UI-only setting that reached nothing.
     difficulty: str = "medium"
-    extracted_profile: dict = {}
     questions: List[InterviewQuestion]
     current_question_index: int = 0
 

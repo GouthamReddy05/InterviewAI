@@ -59,6 +59,7 @@ class ScriptedGenerator:
         self.ratings = list(ratings)
         self.followup_error = followup_error
         self.followup_calls = 0
+        self.follow_up_direction = "go deeper"
 
     def evaluate_answer(self, question, candidate_answer):
         rating = self.ratings.pop(0) if self.ratings else "good"
@@ -68,7 +69,7 @@ class ScriptedGenerator:
             strengths=[],
             improvements=[],
             missing_concepts=[],
-            follow_up_direction="go deeper",
+            follow_up_direction=self.follow_up_direction,
         )
 
     def generate_followup(self, **kwargs):
@@ -91,7 +92,6 @@ def make_manager(ratings, question_count=2, followup_error=None):
             primary_question=f"Primary question {i + 1}?",
             context="context",
             difficulty_level="intermediate",
-            follow_up_question=f"Seed follow-up {i + 1}?",
         )
         for i in range(question_count)
     ]
@@ -222,17 +222,30 @@ def test_history_is_wiped_between_primary_questions():
 # --- Failure handling ------------------------------------------------------
 
 
-def test_follow_up_failure_falls_back_to_the_seed_question():
+def test_follow_up_failure_still_keeps_the_answer():
     # The whole request used to unwind here, so the answer was lost and the
-    # candidate had to retype it.
+    # candidate had to retype it. There is no pre-generated seed question to
+    # fall back on any more, so the turn is completed with the generic prompt.
     manager = make_manager(["good"], followup_error=RuntimeError("groq down"))
     result = manager.submit_answer("s1", "an answer worth keeping")
 
     assert result["action"] == "follow_up"
-    assert result["follow_up_question"] == "Seed follow-up 1?"
+    assert result["follow_up_question"] == (
+        "Could you walk me through a concrete example of that?"
+    )
     session = manager.get_session("s1")
     assert session.answers[0].answer == "an answer worth keeping"
     assert len(session.follow_ups) == 1
+
+
+def test_follow_up_failure_reuses_a_direction_already_phrased_as_a_question():
+    # follow_up_direction is written for the interviewer, so it is only asked
+    # verbatim when the model happened to address the candidate directly.
+    manager = make_manager(["good"], followup_error=RuntimeError("groq down"))
+    manager.generator.follow_up_direction = "Which index did you add, and why?"
+    result = manager.submit_answer("s1", "an answer worth keeping")
+
+    assert result["follow_up_question"] == "Which index did you add, and why?"
 
 
 def test_unscored_evaluations_are_excluded_from_the_score():

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from core.database import Base
@@ -40,12 +40,20 @@ class InterviewSessionModel(Base):
         index=True,
         nullable=False,
     )
-    resume_name = Column(String(255))
+    # No resume_name: it was the uploaded filename and was displayed nowhere.
+    # Kept on the Redis session for the report header only.
     job_role = Column(String(128))
+    # The band the score was earned under. Without it a stored score is not
+    # comparable across sessions — a 72 on "easy" and a 72 on "hard" are not the
+    # same result, and the live session that knows which is which expires after
+    # six hours.
+    difficulty = Column(String(16), default="medium", nullable=False)
     status = Column(String(32), default="in_progress", nullable=False)
     score = Column(Float, nullable=True)
     created_at = Column(DateTime(timezone=True), default=_utcnow, nullable=False)
 
-    report_data = Column(JSON, nullable=True)
-
+    # No report_data: the full report lives in Redis for the session's 6-hour
+    # TTL and is not persisted. An interview always finishes well inside that
+    # window, so the report is served from the live session; once the TTL
+    # lapses, the score and status below are what remains of it.
     user = relationship("User", back_populates="interviews")
