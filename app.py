@@ -456,8 +456,12 @@ async def upload_resume(
         db.commit()
     except SQLAlchemyError as exc:
         db.rollback()
-        # Without the DB row the session can never be ownership-checked, so it
-        # must not be left dangling in Redis.
+        # Fail now rather than twenty minutes from now. Authorisation no longer
+        # depends on this row — get_live_session reads user_id off the session
+        # blob — so the interview would run to completion without it, and then
+        # 404 at the end: /comprehensive-report and /end both key their UPDATE
+        # on a row that was never written. Deleting the session makes the
+        # failure immediate and visible instead of silent until the report.
         session_manager.session_store.delete(session.session_id)
         raise _fail(500, "Could not start the interview session.", exc, "Interview persistence")
 

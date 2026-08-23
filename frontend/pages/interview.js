@@ -20,6 +20,40 @@ let lastFaceMeshResultAt = 0;
 const FACE_MESH_TARGET_FPS = 12;
 const FACE_MESH_MIN_INTERVAL_MS = 1000 / FACE_MESH_TARGET_FPS;
 let lastFaceMeshSentAt = 0;
+
+// The <audio> element currently playing an ElevenLabs clip, if any.
+//
+// speakText() used to call playAudioFromBase64() and throw the returned element
+// away, so the only way to stop the interviewer talking was
+// speechSynthesis.cancel() — which touches the *fallback* voice and nothing
+// else. When ElevenLabs was working (the normal case) the question kept playing
+// after the candidate hit record, into a live microphone, and Web Speech
+// transcribed the interviewer's own words into the candidate's answer.
+let currentTtsAudio = null;
+
+// Bumped by every stopSpeaking(). speakText() captures it before awaiting the
+// TTS round trip and re-checks it after: stopSpeaking() can pause an element
+// that exists, but it cannot cancel a fetch that has not resolved yet, and the
+// ElevenLabs call takes a second or two. Without this, hitting Record while a
+// question was still being generated let the clip start playing *after* the
+// microphone went live — the same bug the audio handle fixes, arriving through
+// the async gap instead.
+let speechEpoch = 0;
+
+/** Silence both speech paths, and invalidate any generation still in flight. */
+function stopSpeaking() {
+    speechEpoch++;
+    if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+    }
+    if (currentTtsAudio) {
+        try {
+            currentTtsAudio.pause();
+            currentTtsAudio.currentTime = 0;
+        } catch (e) { /* already torn down */ }
+        currentTtsAudio = null;
+    }
+}
 function isFaceTrackingLive() {
     // One result within the last 4 seconds. MediaPipe fires at camera rate, so
     // a live tracker is never this quiet; the window only tolerates a hiccup.
@@ -405,9 +439,8 @@ async function startRecording() {
     }
 
 
-    if ('speechSynthesis' in window) {
-        window.speechSynthesis.cancel();
-    }
+    // Both paths, not just the fallback: the microphone is about to go live.
+    stopSpeaking();
 
     if (recognition) {
         try { recognition.start(); } catch(e) { console.error('Failed to start recognition', e); }
@@ -919,24 +952,33 @@ function startInterviewFlow() {
 }
 
 async function speakText(text) {
-    if ('speechSynthesis' in window) {
-
-        window.speechSynthesis.cancel();
-    }
-
+    stopSpeaking();
+    const epoch = speechEpoch;
 
     let cleanText = text.replace(/[\uE000-\uF8FF]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|[\u2011-\u26FF]|\uD83E[\uDD10-\uDDFF]/g, '');
     cleanText = cleanText.replace(/\*\*/g, '').trim();
 
     try {
         const response = await API.generateSpeech(cleanText);
+        // Superseded while the request was in flight — the candidate started
+        // answering, or a newer question is already speaking.
+        if (epoch !== speechEpoch) return;
         if (response.status === 'success' && response.audio) {
-            playAudioFromBase64(response.audio);
+            currentTtsAudio = playAudioFromBase64(response.audio);
+            if (currentTtsAudio) {
+                // Let the handle go once the clip finishes on its own, so a
+                // later stopSpeaking() is not pausing an element that ended.
+                currentTtsAudio.addEventListener('ended', () => {
+                    currentTtsAudio = null;
+                }, { once: true });
+            }
             return;
         }
     } catch (err) {
         console.error("ElevenLabs TTS via backend failed, falling back to Web Speech", err);
     }
+
+    if (epoch !== speechEpoch) return;
 
     if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(cleanText);
@@ -1172,6 +1214,8 @@ async function processAnswer(userAnswer) {
 // concept lists it read are now always empty. Deleted along with the bank.
 
 function endInterview() {
+    stopSpeaking();
+
     if (state.stream) {
         state.stream.getTracks().forEach(track => track.stop());
         state.stream = null;

@@ -3,6 +3,10 @@
 const app = document.getElementById('app');
 
 function logoutUser() {
+    // Before resetState(), which clears the interview but would leave a
+    // question still playing out loud on the landing page.
+    if (typeof stopSpeaking === 'function') stopSpeaking();
+
     localStorage.removeItem('interviewai_token');
     // Allow the next sign-in to be re-verified against the server.
     if (typeof renderLanding === 'function') renderLanding._verified = false;

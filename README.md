@@ -40,7 +40,7 @@ Three stores, each with one job:
 | Auth | JWT (HS256) + bcrypt | Per-request DB lookup so `is_admin` is never trusted from the token |
 | Vision | YOLOv8n | Phone and extra-person detection — the only server-verified integrity signals |
 | Attention | Browser MediaPipe FaceMesh | Iris-based gaze at ~12 fps, in the tab. The only face detector in the system. Reported as feedback, never scored |
-| Speech in | Web Speech API | In-browser streaming recognition, written live into the answer box. Chrome/Edge only — other browsers type |
+| Speech in | Web Speech API | Streaming recognition, written live into the answer box. Chrome/Edge only — other browsers type. Note the browser relays audio to its own vendor's service; it is not on-device |
 | Speech out | ElevenLabs | Returns 503 when no key is set — no fallback key |
 | Frontend | Vanilla JS | One `state` object, a `switch` router over `state.step`, `innerHTML` rendering with explicit escaping |
 
@@ -179,7 +179,11 @@ The follow-up call only needs the evaluation's `follow_up_direction`, not its
 full body, so running the two concurrently is the obvious next win — it is not
 done yet.
 
-**Transcription is browser-only, on purpose.** A server-side faster-whisper
+**Transcription is browser-only, on purpose.** No audio ever reaches this
+application's server — but "browser-only" means the app never handles it, not
+that it stays on the device: Chrome's `webkitSpeechRecognition` streams the
+microphone to Google's speech service and Edge streams it to Microsoft's. That
+is worth stating plainly to a candidate. A server-side faster-whisper
 pass used to re-transcribe the recorded clip and overwrite the live text. It was
 supposed to be gated on quality, but the gate read `info.language_probability` —
 the model's confidence that the audio is *English*, which sits at 1.000 on
